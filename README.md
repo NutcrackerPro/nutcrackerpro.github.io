@@ -1,4 +1,4 @@
-# YuCheng / A little about me
+# A portfolio for myself
 
 A dark grey and blue personal portfolio with four sections: Self introduction, Achievements, Hobbies, and Random facts.
 
