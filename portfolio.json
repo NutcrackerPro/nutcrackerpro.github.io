@@ -3,7 +3,7 @@
   "greeting": "Hi! I am",
   "nickname": "You can also refer me as Nutcracker :D",
   "intro": "I like turning ideas into websites, experimenting with AI, and figuring out how things work.",
-  "heroImage": "/garden.webp",
+  "heroImage": "/garden.svg",
   "heroImageAlt": "Silver-blue leaves and ivory flowers against a dark background",
   "artCaption": "Code. Curiosity. A few side quests.",
   "achievementsIntro": "Some of the small acheivements I have :>",
@@ -52,7 +52,7 @@
     },
     {
       "title": "Bilingual",
-      "description": "My secondary school teaches us to be a bilingual scholar, so I can speak both English and Chinese fluently :D\n"
+      "description": "I can speak both English and Chinese fluently :D"
     }
   ],
   "contacts": [
