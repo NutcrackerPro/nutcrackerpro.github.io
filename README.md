@@ -1,18 +1,16 @@
-# A portfolio for myself
+# Nutcracker's Portfolio
 
 A dark grey and blue personal portfolio with four sections: Self introduction, Achievements, Hobbies, and Random facts.
 
-Made via vibe coding
-
 ## Hosting
 
-This is a static GitHub Pages site. Publish the files at the root of `NutcrackerPro/nutcrackerpro.github.io`. In Settings → Pages choose main and /(root). No paid hosting, domain purchase or API key is needed.
+This is a static GitHub Pages site. Publish the files at the root of `NutcrackerPro/nutcrackerpro.github.io`. In Settings, open Pages and choose main and /(root). No paid hosting, domain purchase or API key is needed.
 
 ## Fill in your portfolio
 
-Use **Edit portfolio** in the footer. The included editor has matching sections and an expandable contacts list.
+Open `admin.html` directly, or enter this secret sequence while viewing the portfolio: `ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a b a`. The homepage has no visible editor link. The sequence hides the entry point only; it is not authentication. The included editor has matching sections, a smiley-phrase list and an expandable contacts list.
 
-1. Edit your text, add achievements, hobbies or facts, and optionally choose photos.
+1. Edit your text, add achievements, hobbies or facts, arrange smiley phrases, and optionally choose photos.
 2. Choose **Copy for GitHub**, then **Open GitHub editor**.
 3. Sign in and replace the text in `portfolio.json` with the copied content. Commit the change.
 4. Refresh the website after GitHub Pages finishes publishing.
@@ -25,11 +23,17 @@ Only include information you want public. Each photo can be up to 2 MB; the comp
 
 The email contact opens an email application. Discord uses a copy-username button because a username is not a Discord user ID. More email addresses, usernames or web links can be added in the editor.
 
+## Smiley phrases
+
+Edit the smiley’s messages in the **Smiley phrases** section. Add, remove and reorder phrases using the same controls as the other lists. They are stored in `portfolio.json` as `smileyPhrases`, an array of objects such as `{"text": "Hey there! :D"}`. An empty array intentionally disables messages. Older content without this field starts with three default phrases.
+
 ## Interactions
 
 Sections assemble on navigation with typed headings, staggered content and an artwork reveal. This is a visual transition; it does not call an AI service or incur API costs. Use the top navigation, arrow buttons or keyboard arrows to switch sections. Hobby cards expand and random-fact cards reveal their answers. Motion can be disabled and device reduced-motion preferences are respected.
 
 ## Assets
+
+The page title shown in browser tabs and shared links is **Nutcracker's Portfolio**. The penguin site icon embeds the supplied image in `favicon.svg?v=2`, with `nutcracker.jpeg?v=2` as a fallback and an Apple touch icon.
 
 The botanical artwork is original AI-generated art. Fonts are Italiana and DM Sans via Google Fonts, with system fallbacks. The website reads `portfolio.json` without a build step.
 
