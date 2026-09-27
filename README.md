@@ -2,6 +2,8 @@
 
 A dark grey and blue personal portfolio with four sections: Self introduction, Achievements, Hobbies, and Random facts.
 
+Made via vibe coding
+
 ## Hosting
 
 This is a static GitHub Pages site. Publish the files at the root of `NutcrackerPro/nutcrackerpro.github.io`. In Settings → Pages choose main and /(root). No paid hosting, domain purchase or API key is needed.
