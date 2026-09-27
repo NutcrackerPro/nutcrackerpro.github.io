@@ -1,2 +1,36 @@
-# nutcrackerpro.github.io
-Nutcracker Cool — personal portfolio, creative websites and AI experiments.
+# YuCheng / A little about me
+
+A dark grey and blue personal portfolio with four sections: Self introduction, Achievements, Hobbies, and Random facts.
+
+## Hosting
+
+This is a static GitHub Pages site. Publish the files at the root of `NutcrackerPro/nutcrackerpro.github.io`. In Settings → Pages choose main and /(root). No paid hosting, domain purchase or API key is needed.
+
+## Fill in your portfolio
+
+Use **Edit portfolio** in the footer. The included editor has matching sections and an expandable contacts list.
+
+1. Edit your text, add achievements, hobbies or facts, and optionally choose photos.
+2. Choose **Copy for GitHub**, then **Open GitHub editor**.
+3. Sign in and replace the text in `portfolio.json` with the copied content. Commit the change.
+4. Refresh the website after GitHub Pages finishes publishing.
+
+Alternatively, download `portfolio.json` and upload it to the repository root, replacing the existing file. Draft edits are only held in the current editor page until copied or downloaded. The public editor cannot save to GitHub; GitHub account permissions protect publication.
+
+Only include information you want public. Each photo can be up to 2 MB; the complete content file is limited to 8 MB. Photos selected in the draft are embedded in the JSON file. No private information or credentials belong in this public repository.
+
+## Contacts
+
+The email contact opens an email application. Discord uses a copy-username button because a username is not a Discord user ID. More email addresses, usernames or web links can be added in the editor.
+
+## Interactions
+
+Sections assemble on navigation with typed headings, staggered content and an artwork reveal. This is a visual transition; it does not call an AI service or incur API costs. Use the top navigation, arrow buttons or keyboard arrows to switch sections. Hobby cards expand and random-fact cards reveal their answers. Motion can be disabled and device reduced-motion preferences are respected.
+
+## Assets
+
+The botanical artwork is original AI-generated art. Fonts are Italiana and DM Sans via Google Fonts, with system fallbacks. The website reads `portfolio.json` without a build step.
+
+## Local preview
+
+Serve the directory with a static HTTP server. Direct file opening may prevent JSON content from loading.
