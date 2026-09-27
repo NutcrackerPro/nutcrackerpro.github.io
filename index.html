@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15171b">
+  <meta name="description" content="Hi! I am YuCheng. You can also refer me as Nutcracker :D. A personal collection of achievements, hobbies and random facts.">
+  <title>YuCheng / A little about me</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;600;700&family=Italiana&display=swap" rel="stylesheet">
+  <link rel="preload" href="garden.svg" as="image"><link rel="stylesheet" href="styles.css"><script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#stage">Skip to content</a>
+  <div class="site-shell">
+    <header class="site-header"><a href="#introduction" class="wordmark" aria-label="YuCheng home">yc<span aria-hidden="true">✳</span></a><p class="header-note">A little about me.<br>A little of everything.</p><button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false"><span aria-hidden="true">◌</span> Motion on</button></header>
+    <nav class="section-nav" aria-label="Portfolio sections"><a href="#introduction" data-slide="introduction" aria-current="page"><span>01</span>Self introduction</a><a href="#achievements" data-slide="achievements"><span>02</span>Achievements</a><a href="#hobbies" data-slide="hobbies"><span>03</span>Hobbies</a><a href="#facts" data-slide="facts"><span>04</span>Random facts</a></nav>
+    <main id="stage" class="stage" tabindex="-1" aria-label="Portfolio section"><section class="slide intro-slide" aria-labelledby="slide-title"><div class="intro-copy"><p class="eyebrow">01 / Self introduction</p><h1 id="slide-title"><span class="greeting">Hi! I am</span><span class="hero-name">YuCheng<span class="smile">:D</span></span></h1><p class="nickname">You can also refer me as Nutcracker :D</p><p class="intro-body">I like turning ideas into websites, experimenting with AI, and figuring out how things work.</p><a href="#achievements" class="explore-link">Get to know me <span aria-hidden="true">↗</span></a></div><figure class="intro-art"><img src="garden.svg" width="1586" height="992" alt="Silver-blue leaves and ivory flowers against a dark background"><figcaption><span>Code. Curiosity. A few side quests.</span><span aria-hidden="true">✳</span></figcaption></figure></section></main>
+    <div class="slide-controls"><div class="slide-position"><span id="slide-current">01</span><span class="position-line"><i id="slide-progress"></i></span><span>04</span><span class="keyboard-note">Use ← → to explore</span></div><div class="slide-actions"><button id="previous" type="button" aria-label="Previous section" disabled>←</button><button id="next" type="button" aria-label="Next section">→</button></div></div>
+    <footer class="site-footer"><div class="contact-heading"><span class="eyebrow">Keep in touch</span><span>Say hi, share an idea.</span></div><div id="contact-list" class="contact-list"><a href="mailto:cleavant666@gmail.com">Email <span>cleavant666@gmail.com ↗</span></a><button type="button" data-copy="nutcracker_cool" aria-label="Copy Discord username nutcracker_cool">Discord <span>nutcracker_cool ⧉</span></button></div><a href="admin.html" class="admin-link">Edit portfolio ↗</a></footer>
+  </div>
+  <p class="status-toast" id="status" role="status" aria-live="polite"></p>
+  <noscript><p class="noscript-note">Enable JavaScript to explore the other sections and use the editor.</p></noscript>
+</body>
+</html>
