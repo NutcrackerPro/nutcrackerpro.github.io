@@ -1,0 +1,70 @@
+{
+  "name": "YuCheng",
+  "greeting": "Hi! I am",
+  "nickname": "You can also refer me as Nutcracker :D",
+  "intro": "I like turning ideas into websites, experimenting with AI, and figuring out how things work.",
+  "heroImage": "/garden.webp",
+  "heroImageAlt": "Silver-blue leaves and ivory flowers against a dark background",
+  "artCaption": "Code. Curiosity. A few side quests.",
+  "achievementsIntro": "Some of the small acheivements I have :>",
+  "achievements": [
+    {
+      "year": "2026",
+      "title": "Singapore Junior Physics Olympiad (SJPO)",
+      "description": "I have obtained Gold award for SJPO 2026",
+      "image": "",
+      "imageAlt": ""
+    },
+    {
+      "year": "2025",
+      "title": "National Junior Informatics Olympiad (NJIO) ",
+      "description": "I have obtained Gold award for this competition, global rank 18",
+      "image": "",
+      "imageAlt": ""
+    }
+  ],
+  "hobbiesIntro": "Things I keep coming back to. Pick one to find out more.",
+  "hobbies": [
+    {
+      "title": "Vibe coding",
+      "description": "I did some vibe coding projects by myself, such as making this website and also creating my private AI assistant J.A.R.V.I.S. (Inspired by Jarvis from Iron Man in Marvel :D )",
+      "image": "",
+      "imageAlt": ""
+    },
+    {
+      "title": "Cubing",
+      "description": "I play 2x2, 3x3, 4x4, 5x5, megaminx, skewb and pyramid. My pb for 3x3 is 25 seconds (kinda slow lol)",
+      "image": "",
+      "imageAlt": ""
+    },
+    {
+      "title": "Piano",
+      "description": "I play the piano when I have free time, and I like playing different type of genres, from classical to pop. I have the Grade 4 merit certificate and I am currently studying for Stage 5 ABRSM ",
+      "image": "",
+      "imageAlt": ""
+    }
+  ],
+  "factsIntro": "A few little things about me. Tap a card to reveal one.",
+  "facts": [
+    {
+      "title": "Another name?",
+      "description": "You can call me Nutcracker :D"
+    },
+    {
+      "title": "Bilingual",
+      "description": "My secondary school teaches us to be a bilingual scholar, so I can speak both English and Chinese fluently :D\n"
+    }
+  ],
+  "contacts": [
+    {
+      "label": "Email",
+      "type": "email",
+      "value": "cleavant666@gmail.com"
+    },
+    {
+      "label": "Discord",
+      "type": "copy",
+      "value": "nutcracker_cool"
+    }
+  ]
+}
