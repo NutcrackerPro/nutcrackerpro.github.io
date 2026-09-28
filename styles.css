@@ -25,3 +25,9 @@
 .smile-button:disabled{opacity:1}
 .smile-message{max-width:440px;position:relative;margin:0 0 23px;padding:14px 18px;border:1px solid #557da8;border-radius:4px 14px 14px 14px;background:#17283d;color:#d3e6ff;line-height:1.5;font-size:15px;white-space:pre-line;overflow-wrap:anywhere}
 @media(max-width:650px){.hero-name{font-size:clamp(3.5rem,14vw,6rem)}.intro-art figcaption>.icon{width:35px;height:35px}.empty-chapter>.icon{display:none}}
+
+/* Circular profile photo used as the home link. */
+.wordmark{display:inline-flex;align-items:center;flex:0 0 auto;line-height:0;border-radius:50%}
+.wordmark .profile-logo{display:block;width:56px;height:56px;object-fit:cover;border-radius:50%;border:1px solid #87bfff66;transition:transform .2s ease,border-color .2s ease}
+.wordmark:hover .profile-logo{transform:scale(1.06);border-color:var(--blue)}
+@media(max-width:650px){.wordmark .profile-logo{width:46px;height:46px}}
