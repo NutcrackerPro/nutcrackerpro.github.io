@@ -31,3 +31,23 @@
 .wordmark .profile-logo{display:block;width:56px;height:56px;object-fit:cover;border-radius:50%;border:1px solid #87bfff66;transition:transform .2s ease,border-color .2s ease}
 .wordmark:hover .profile-logo{transform:scale(1.06);border-color:var(--blue)}
 @media(max-width:650px){.wordmark .profile-logo{width:46px;height:46px}}
+
+/* Revealed only after ten consecutive penguin taps. */
+.site-header .wordmark{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.profile-logo{-webkit-user-drag:none}
+.secret-controls{margin:0 0 24px;padding:24px;border:1px solid #557da8;border-radius:16px;background:#17283d}
+.secret-controls[hidden]{display:none}
+.secret-controls h2{font:32px/1.15 var(--serif);margin-bottom:10px}
+.secret-controls .eyebrow{margin-bottom:8px}
+.secret-help,.secret-status{font-size:14px;color:#c1d6ee;max-width:620px}
+.secret-progress{display:flex;gap:6px;margin:18px 0 10px}
+.secret-step{height:5px;flex:1;max-width:34px;background:#344e6b;border-radius:4px}
+.secret-step.complete{background:var(--blue)}
+.secret-pad{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.secret-key{display:grid;place-items:center;width:48px;height:48px;border:1px solid #557da8;border-radius:10px;background:#101d2e;color:var(--text);font:600 17px var(--sans);touch-action:manipulation}
+.secret-key:hover{background:#294767;border-color:var(--blue)}
+.secret-key .icon{width:22px;height:22px}
+.secret-mode .profile-logo{box-shadow:0 0 0 4px #87bfff55;border-color:var(--blue)}
+.secret-mode .section-nav{opacity:.5;cursor:default}
+.secret-mode .explore-link{opacity:.5;cursor:default}
+@media(max-width:650px){.secret-controls{padding:18px}.secret-key{width:44px;height:44px}.secret-pad{gap:6px}}
