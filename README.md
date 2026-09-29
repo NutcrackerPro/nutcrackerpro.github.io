@@ -8,7 +8,7 @@ This is a static GitHub Pages site. Publish the files at the root of `Nutcracker
 
 ## Fill in your portfolio
 
-Open `admin.html` directly, or enter this secret sequence while viewing the portfolio: `ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a b a`. The homepage has no visible editor link. The sequence hides the entry point only; it is not authentication. The included editor has matching sections, a smiley-phrase list and an expandable contacts list.
+Open `admin.html?v=20260928-secret2` directly, or tap the circular penguin 10 times with no more than 2 seconds between taps. Secret mode pauses section navigation while you enter `ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a b a` using the keyboard or on-screen buttons. A gap longer than 2 seconds resets the tap count. Tap the penguin once more to cancel secret mode and unlock the sections. The homepage has no visible editor link. The sequence hides the entry point only; it is not authentication. The included editor has matching sections, a smiley-phrase list and an expandable contacts list.
 
 1. Edit your text, add achievements, hobbies or facts, arrange smiley phrases, and optionally choose photos.
 2. Choose **Copy for GitHub**, then **Open GitHub editor**.
