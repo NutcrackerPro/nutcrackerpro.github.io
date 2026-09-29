@@ -1,10 +1,13 @@
 'use strict';
 let draft;
 let dirty = false;
+let loading = false;
+let loadCount = 0;
 const form = document.getElementById('portfolio-form');
 const status = document.getElementById('editor-status');
 const download = document.getElementById('download');
 const copy = document.getElementById('copy');
+const refresh = document.getElementById('refresh-published');
 const scalar = ['name','greeting','nickname','intro','heroImageAlt','artCaption','achievementsIntro','hobbiesIntro','factsIntro'];
 const schemas = {
   achievements:[['year','Year'],['title','Achievement'],['description','What would you like to share?','textarea'],['image','Photo (optional)','image'],['imageAlt','Describe the photo']],
@@ -24,13 +27,14 @@ function field(label,value,set,type='text'){
  input.addEventListener('input',()=>{set(input.value);change();});wrap.append(input);return wrap;
 }
 function imageField(label,value,set){
+ const owner=draft;
  const wrap=node('div','image-field');const preview=node('img','photo-preview');preview.alt='Selected image preview';const src=imageSource(value);preview.hidden=!src;if(src)preview.src=src;
  const url=field(label+' — image path or URL',value,v=>{set(v);const s=imageSource(v);preview.hidden=!s;if(s)preview.src=s;});const textInput=url.querySelector('input');
  if(typeof value==='string'&&value.startsWith('data:')){textInput.value='';textInput.placeholder='Uploaded photo selected';}
  const upload=node('input','image-upload');upload.type='file';upload.accept='image/png,image/jpeg,image/webp,image/gif,image/avif';
  const uploadLabel=node('label','','Or choose a photo');uploadLabel.append(upload);
  upload.addEventListener('change',async()=>{const file=upload.files[0];if(!file)return;if(!['image/png','image/jpeg','image/webp','image/gif','image/avif'].includes(file.type)||file.size>2*1024*1024){status.textContent='Choose a PNG, JPG, WebP, GIF or AVIF image under 2 MB.';upload.value='';return;}
-  const reader=new FileReader();reader.onload=()=>{const source=String(reader.result);const probe=new Image();probe.onload=()=>{set(source);preview.src=source;preview.hidden=false;textInput.value='';textInput.placeholder='Uploaded photo selected';change();};probe.onerror=()=>{status.textContent='That image could not be opened. Please choose another.';};probe.src=source;};reader.onerror=()=>{status.textContent='Could not read that image. Please try again.';};reader.readAsDataURL(file);
+  const reader=new FileReader();reader.onload=()=>{if(draft!==owner)return;const source=String(reader.result);const probe=new Image();probe.onload=()=>{if(draft!==owner)return;set(source);preview.src=source;preview.hidden=false;textInput.value='';textInput.placeholder='Uploaded photo selected';change();};probe.onerror=()=>{if(draft===owner)status.textContent='That image could not be opened. Please choose another.';};probe.src=source;};reader.onerror=()=>{if(draft===owner)status.textContent='Could not read that image. Please try again.';};reader.readAsDataURL(file);
  });
  wrap.append(preview,url,uploadLabel);return wrap;
 }
@@ -60,4 +64,23 @@ form.addEventListener('click',event=>{const button=event.target.closest('[data-a
 copy.addEventListener('click',async()=>{try{const content=serialize();await navigator.clipboard.writeText(content);status.textContent='Copied. Open the GitHub editor, replace the file contents, and commit your changes. Your live site has not changed yet.';}catch(error){status.textContent=error.message||'Copy is unavailable here. Please download your changes instead.';}});
 download.addEventListener('click',()=>{try{const content=serialize();const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));const a=node('a');a.href=url;a.download='portfolio.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);dirty=false;status.textContent='Downloaded portfolio.json. Upload it to your GitHub repository to publish these changes.';}catch(error){status.textContent=error.message;}});
 window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
-fetch('portfolio.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('Could not load your portfolio. Refresh to try again.');return r.json();}).then(data=>{if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Portfolio data has an invalid format.');draft=data;if(!Object.prototype.hasOwnProperty.call(draft,'smileyPhrases'))draft.smileyPhrases=[{text:'Hey there! :D'},{text:'Welcome to my little corner of the internet.'},{text:'One more side quest?'}];for(const key of Object.keys(schemas))draft[key]=Array.isArray(draft[key])?draft[key]:[];for(const key of scalar)form.elements.namedItem(key).value=typeof draft[key]==='string'?draft[key]:'';document.getElementById('hero-field').append(imageField('Homepage artwork',draft.heroImage,v=>{draft.heroImage=v;}));Object.keys(schemas).forEach(renderList);form.hidden=false;download.disabled=false;copy.disabled=false;status.textContent='Ready to fill in. Your published content is loaded below.';}).catch(error=>{status.textContent=error.message;});
+async function loadPublished(confirmDiscard=true){
+ if(loading)return;
+ if(confirmDiscard&&dirty&&!window.confirm('Replace your unsaved draft with the latest published content? Download or copy your changes first if you want to keep them.'))return;
+ loading=true;refresh.disabled=true;download.disabled=true;copy.disabled=true;form.inert=true;form.setAttribute('aria-busy','true');status.textContent='Loading the latest published content…';
+ try{
+  const url=new URL('portfolio.json',document.baseURI);url.searchParams.set('refresh',`${Date.now()}-${++loadCount}`);
+  const response=await fetch(url.href,{cache:'no-store'});if(!response.ok)throw new Error('Could not load your published portfolio. Please try refreshing again.');
+  const data=await response.json();if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Portfolio data has an invalid format.');
+  for(const key of Object.keys(schemas))if(Array.isArray(data[key])&&data[key].some(item=>!item||typeof item!=='object'||Array.isArray(item)))throw new Error('Portfolio data has an invalid item.');
+  if(!Object.prototype.hasOwnProperty.call(data,'smileyPhrases'))data.smileyPhrases=[{text:'Hey there! :D'},{text:'Welcome to my little corner of the internet.'},{text:'One more side quest?'}];
+  for(const key of Object.keys(schemas))data[key]=Array.isArray(data[key])?data[key]:[];
+  draft=data;
+  for(const key of scalar)form.elements.namedItem(key).value=typeof draft[key]==='string'?draft[key]:'';
+  document.getElementById('hero-field').replaceChildren(imageField('Homepage artwork',draft.heroImage,v=>{draft.heroImage=v;}));
+  Object.keys(schemas).forEach(renderList);dirty=false;form.hidden=false;status.textContent='Latest published content loaded. Edit below, then copy or download your changes to publish on GitHub.';
+ }catch(error){status.textContent=(error.message||'Could not load your published portfolio.')+(draft?' Your current draft is unchanged.':'');}
+ finally{loading=false;refresh.disabled=false;download.disabled=!draft;copy.disabled=!draft;form.inert=false;form.setAttribute('aria-busy','false');}
+}
+refresh.addEventListener('click',()=>loadPublished());
+loadPublished(false);
