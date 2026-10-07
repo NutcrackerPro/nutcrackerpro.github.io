@@ -2,7 +2,7 @@
 
 A continuous scroll-driven 3D journey through Self introduction, Some cool photos, Achievements, Hobbies, and Random facts. **Some cool photos** sits directly below the introduction in the same page and 3D experience. Scrolling moves through five worlds: chrome orbits, floating photo frames, an icy constellation, cyan portals, and a deep-blue tunnel. Background light and accent colors blend along the journey. Drag horizontally in the open scene for unlimited 360-degree rotation; use the header or side dots to jump between sections. Content remains readable inline, with clear glass cards, expanding hobbies, fact reveals and full-size photos.
 
-The graphics use locally bundled Three.js 0.180.0 under its MIT license. A static penguin view appears if WebGL is unavailable. Motion can be turned off; device reduced-motion preferences are respected. Lighter shaders, instanced geometry, a lower pixel ratio and a 30 fps idle cadence reduce graphics work; interactions can render at 60 fps. Existing content remains in `portfolio.json`.
+The graphics use locally bundled Three.js 0.180.0 under its MIT license. A static penguin view appears if WebGL is unavailable. A lightweight futuristic Nutcracker startup screen waits for scene and content readiness plus a 1.1-second minimum, then offers scrolling, swiping, keyboard or button entry. Its rings pause once ready. Motion can be turned off; device reduced-motion preferences are respected. Lighter shaders, instanced geometry and a lower pixel ratio reduce graphics work. The scene draws on demand for scroll, drag and other controls, then stops rendering when idle. Existing content remains in `portfolio.json`.
 
 ## Hosting
 
@@ -10,7 +10,7 @@ This is a static GitHub Pages site. Publish the files at the root of `Nutcracker
 
 ## Fill in your portfolio
 
-Open `admin.html?v=20261007-refine3` directly, or tap the circular penguin 10 times with no more than 2 seconds between taps. Secret mode pauses section navigation while you enter `ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a b a` using the keyboard or on-screen buttons. A gap longer than 2 seconds resets the tap count. Tap the penguin once more to cancel secret mode and unlock the sections. The homepage has no visible editor link. The sequence hides the entry point only; it is not authentication. The included editor has matching sections, an editable photo collection, a smiley-phrase list and an expandable contacts list.
+Open `admin.html?v=20261007-refine4` directly, or tap the circular penguin 10 times with no more than 2 seconds between taps. Secret mode pauses section navigation while you enter `ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a b a` using the keyboard or on-screen buttons. A gap longer than 2 seconds resets the tap count. Tap the penguin once more to cancel secret mode and unlock the sections. The homepage has no visible editor link. The sequence hides the entry point only; it is not authentication. The included editor has matching sections, an editable photo collection, a smiley-phrase list and an expandable contacts list.
 
 1. Edit your text, add photos, achievements, hobbies or facts, arrange smiley phrases, and optionally choose images.
 2. Choose **Copy for GitHub**, then **Open GitHub editor**.
@@ -31,11 +31,17 @@ Edit the smiley’s messages in the **Smiley phrases** section. Add, remove and 
 
 ## Interactions
 
-Headings and copy reveal character by character as they enter the viewport. The inline smiley changes expression, pops a few small sparks and reveals your editable phrases. These effects respect Motion off and reduced-motion preferences. Camera position, 3D worlds and background colors respond to scroll position. These visual effects run locally without an AI service or API cost. Use the header or side dots to jump between worlds. Hobby cards expand and fact cards reveal their answers. Motion off removes continuous animation while retaining static views of every world. The penguin secret mode pauses scrolling and navigation until cancelled.
+Headings and copy reveal character by character as they enter the viewport. The inline smiley changes expression, pops a few small sparks and reveals your editable phrases. These effects respect Motion off and reduced-motion preferences. Camera position, 3D worlds and background colors respond to scroll position. These visual effects run locally without an AI service or API cost. Use the header or side dots to jump between worlds. Hobby cards expand and fact cards reveal their answers. Motion off removes animated transitions while retaining static views of every world. The penguin secret mode pauses scrolling and navigation until cancelled.
+
+## Soundtracks
+
+Optional `soundtracks` entries use `{title,url}`. In **07 / Soundtracks**, add a title and a direct HTTPS audio link, or upload a playable audio file under 2 MB. Uploads stay in the draft and are included in the same public `portfolio.json` when published; the total 8 MB content limit still applies. MP3, OGG, WAV, M4A, AAC, WebM and FLAC are accepted where the browser supports them.
+
+Visitors choose Play before music starts. The compact player offers Play/Pause, track selection, Next and volume; it is hidden when no tracks are configured. No audio subscription or API is required.
 
 ## Some cool photos
 
-The **Some cool photos** section is part of the scrolling homepage, directly below Self introduction. It shares the dark-blue 3D design of the other sections and has its own floating photo-frame world. Filters show Everything, Photos, or Places & travel. Select a photo to view it full size. Blank space between controls and cards stays available for rotating the background models.
+The **Some cool photos** section is part of the scrolling homepage, directly below Self introduction. The introduction has no extra photo shortcut card. It shares the dark-blue 3D design of the other sections and has its own floating photo-frame world. Filters show Everything, Photos, or Places & travel. Select a photo to view it full size. Blank space between controls and cards stays available for rotating the background models.
 
 In the editor, **06 / Some cool photos** lets you set the section title/introduction and add, remove or reorder entries with a category, title, date, location, note and photo. Future travel photos and places visited can be added here. Publish the same `portfolio.json` file as usual; no separate page or account is needed.
 
