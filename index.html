@@ -2,33 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#15171b">
-  <meta name="description" content="Achievements, hobbies, random facts and creative projects.">
-  <meta property="og:title" content="Nutcracker's Portfolio">
-  <meta property="og:description" content="Achievements, hobbies, random facts and creative projects.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://nutcrackerpro.github.io/">
-  <meta property="og:site_name" content="Nutcracker's Portfolio">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Nutcracker's Portfolio">
-  <meta name="twitter:description" content="Achievements, hobbies, random facts and creative projects.">
+  <meta name="theme-color" content="#080b12">
+  <meta name="description" content="A little universe of achievements, hobbies and random facts. Explore Nutcracker's interactive portfolio.">
+  <meta property="og:title" content="Nutcracker's Portfolio"><meta property="og:description" content="A little universe of achievements, hobbies and random facts."><meta property="og:type" content="website"><meta property="og:url" content="https://nutcrackerpro.github.io/"><meta property="og:site_name" content="Nutcracker's Portfolio">
+  <meta name="twitter:card" content="summary"><meta name="twitter:title" content="Nutcracker's Portfolio"><meta name="twitter:description" content="A little universe of achievements, hobbies and random facts.">
   <title>Nutcracker's Portfolio</title>
   <link rel="icon" href="nutcracker.jpeg?v=2" type="image/jpeg"><link rel="icon" href="favicon.svg?v=2" type="image/svg+xml"><link rel="apple-touch-icon" href="nutcracker.jpeg?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;600;700&family=Italiana&display=swap" rel="stylesheet">
-  <link rel="preload" href="garden.svg" as="image"><link rel="stylesheet" href="styles.css?v=20260928-secret2"><script src="app.js?v=20260928-secret2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20260928-secret2"><link rel="stylesheet" href="universe.css?v=20261007-1"><script type="module" src="universe-app.js?v=20261007-1"></script>
 </head>
-<body>
-  <a class="skip" href="#stage">Skip to content</a>
+<body class="portfolio-3d">
+  <a class="skip" href="#open-chapter">Skip to portfolio content</a>
   <div class="site-shell">
-    <header class="site-header"><a href="#introduction" class="wordmark" aria-label="Nutcracker home"><img class="profile-logo" src="nutcracker.jpeg?v=2" alt="" width="56" height="56" decoding="async" draggable="false"></a><p class="header-note">A little about me.<br>A little of everything.</p><button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false"><svg class="icon icon-motion" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 1 0 9 9M17 4h.01M21 8h.01"/></svg> Motion on</button></header>
+    <header class="site-header">
+      <a href="#introduction" class="wordmark" aria-label="Nutcracker home"><img class="profile-logo" src="nutcracker.jpeg?v=2" alt="" width="44" height="44" decoding="async" draggable="false"></a>
+      <div class="brand"><strong id="brand-name">Nutcracker</strong><span>PERSONAL UNIVERSE / PORTFOLIO</span></div>
+      <nav class="section-nav" aria-label="Portfolio sections"><a href="#introduction" data-slide="introduction" aria-current="page"><span>01</span>Self introduction</a><a href="#achievements" data-slide="achievements"><span>02</span>Achievements</a><a href="#hobbies" data-slide="hobbies"><span>03</span>Hobbies</a><a href="#facts" data-slide="facts"><span>04</span>Random facts</a></nav>
+      <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false">Motion on</button>
+    </header>
     <section id="secret-controls" class="secret-controls" aria-label="Secret code entry" tabindex="-1" hidden></section>
-    <nav class="section-nav" aria-label="Portfolio sections"><a href="#introduction" data-slide="introduction" aria-current="page"><span>01</span>Self introduction</a><a href="#achievements" data-slide="achievements"><span>02</span>Achievements</a><a href="#hobbies" data-slide="hobbies"><span>03</span>Hobbies</a><a href="#facts" data-slide="facts"><span>04</span>Random facts</a></nav>
-    <main id="stage" class="stage" tabindex="-1" aria-label="Portfolio section"><section class="slide intro-slide" aria-labelledby="slide-title"><div class="intro-copy"><p class="eyebrow">01 / Self introduction</p><h1 id="slide-title"><span class="greeting">Hi! I am</span><span class="hero-name">Nutcracker<span class="smile">:D</span></span></h1><p class="nickname">I love playing blue archive</p><p class="intro-body">I like turning ideas into websites, experimenting with AI, and figuring out how things work.</p><a href="#achievements" class="explore-link">Get to know me <svg class="icon icon-external" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 18 18 6M6 6h12v12"/></svg></a></div><figure class="intro-art"><img src="garden.svg" width="1586" height="992" alt="Silver-blue leaves and ivory flowers against a dark background"><figcaption><span>Code. Curiosity. A few side quests.</span><svg class="icon icon-spark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/></svg></figcaption></figure></section></main>
-    <div class="slide-controls"><div class="slide-position"><span id="slide-current">01</span><span class="position-line"><i id="slide-progress"></i></span><span>04</span><span class="keyboard-note">Use arrow keys to explore</span></div><div class="slide-actions"><button id="previous" type="button" aria-label="Previous section" disabled><svg class="icon icon-left" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button id="next" type="button" aria-label="Next section"><svg class="icon icon-right" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div></div>
-    <footer class="site-footer"><div class="contact-heading"><span class="eyebrow">Keep in touch</span><span>Say hi, share an idea.</span></div><div id="contact-list" class="contact-list"><a href="mailto:cleavant666@gmail.com">Email <span class="contact-value">cleavant666@gmail.com <svg class="icon icon-external" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 18 18 6M6 6h12v12"/></svg></span></a><button type="button" data-copy="nutcracker_cool" aria-label="Copy Discord username nutcracker_cool">Discord <span class="contact-value">nutcracker_cool <svg class="icon icon-copy" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 9h11v11H9zM15 5V3H3v12h2"/></svg></span></button></div></footer>
+    <main class="universe" aria-label="Interactive portfolio gallery">
+      <div class="scene-wrap" id="scene-wrap"><canvas id="universe-canvas" aria-label="A three-dimensional gallery. Drag to rotate, or use the labelled chapter links." role="img"></canvas><div class="scene-fallback" hidden><div class="fallback-orbit"></div><img src="nutcracker.jpeg" alt="Nutcracker's penguin"><p>Explore a chapter using the links above.</p></div></div>
+      <div class="scene-grid" aria-hidden="true"></div>
+      <div class="universe-copy">
+        <p class="universe-eyebrow"><span class="signal-dot"></span><span id="chapter-label">01 / SELF INTRODUCTION</span></p>
+        <h1 id="universe-title">A little<br><em>universe.</em></h1>
+        <p class="home-greeting"><span id="home-greeting">Hi! I am Nutcracker</span><button id="home-smile" type="button" aria-label="Show a new message" aria-controls="home-smile-message" title="Click me!">:D</button></p>
+        <p id="home-smile-message" class="home-smile-message" role="status" aria-live="polite" hidden></p>
+        <p id="chapter-description" class="chapter-description">A few things I make, love and discover.<br>Step inside and get to know me.</p>
+        <button id="open-chapter" type="button" class="chapter-open"><span id="open-label">Get to know me</span><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+        <div class="chapter-note"><span id="chapter-count">A LITTLE OF EVERYTHING</span><span>MADE OF CURIOSITY</span></div>
+      </div>
+      <div class="scene-caption"><span class="orbit-mark" aria-hidden="true">◎</span><span id="scene-hint">DRAG TO ROTATE · CLICK A FLOATING CHAPTER</span><button id="reset-view" type="button" aria-label="Reset the 3D view">Reset view</button></div>
+      <div class="scene-index" aria-hidden="true"><span id="world-number">01</span><span> / 04</span></div>
+    </main>
+    <footer class="universe-footer">
+      <div class="slide-controls"><div class="slide-position"><span id="slide-current">01</span><span class="position-line"><i id="slide-progress"></i></span><span>04</span></div><div class="slide-actions"><button id="previous" type="button" aria-label="Previous section" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button id="next" type="button" aria-label="Next section"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div></div>
+      <span class="footer-note">A LITTLE ABOUT ME. A LITTLE OF EVERYTHING.</span>
+      <div id="contact-list" class="contact-list"><a href="mailto:cleavant666@gmail.com">Email</a><button type="button" data-copy="nutcracker_cool">Discord</button></div>
+    </footer>
   </div>
+  <dialog id="chapter-dialog" class="chapter-dialog" aria-labelledby="slide-title"><div class="dialog-top"><span class="eyebrow">A chapter of my universe</span><button id="close-chapter" type="button" aria-label="Close chapter">Close <span aria-hidden="true">×</span></button></div><div id="stage" class="stage" tabindex="-1" aria-label="Portfolio section"></div><div class="dialog-bottom"><button id="dialog-previous" type="button">Previous chapter</button><button id="dialog-next" type="button">Next chapter <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></div></dialog>
   <p class="status-toast" id="status" role="status" aria-live="polite"></p>
-  <noscript><p class="noscript-note">Enable JavaScript to explore the other sections and use the editor.</p></noscript>
+  <noscript><div class="noscript-note">Hi! I am Nutcracker. You can reach me at <a href="mailto:cleavant666@gmail.com">cleavant666@gmail.com</a>. Enable JavaScript to explore my achievements, hobbies and random facts.</div></noscript>
 </body>
 </html>
