@@ -93,8 +93,8 @@
 .scroll-portfolio .brand { gap: 4px; }
 .scroll-portfolio .brand strong { font-size: 14px; font-weight: 500; }
 .scroll-portfolio .brand > span { font-size: 7px; color: #8593a9; letter-spacing: .17em; }
-.scroll-portfolio .section-nav { gap: clamp(15px, 2.2vw, 34px); margin-left: auto; border: 0; }
-.scroll-portfolio .section-nav a { min-height: 44px; padding: 14px 0; font-size: 11px; color: #a0adbf; gap: 8px; }
+.scroll-portfolio .section-nav { gap: clamp(11px, 1.6vw, 26px); margin-left: auto; border: 0; }
+.scroll-portfolio .section-nav a { min-height: 44px; padding: 14px 0; font-size: 11px; color: #a0adbf; gap: 8px; white-space: nowrap; }
 .scroll-portfolio .section-nav a span { font-size: 8px; color: #647990; }
 .scroll-portfolio .section-nav a:nth-child(n+3) { border: 0; }
 .scroll-portfolio .section-nav a:hover { color: #e1edff; }
@@ -103,14 +103,22 @@
 .scroll-portfolio .motion-toggle { min-height: 44px; margin-left: 12px; padding: 9px 13px; gap: 6px; font-size: 10px; border-radius: 50px; border-color: #a7c1e124; background: #d0e6ff04; }
 .scroll-portfolio .motion-toggle:hover { border-color: #a7c1e160; background: #d0e6ff0b; }
 .scroll-portfolio .site-shell, .scroll-portfolio .journey, .scroll-portfolio .story-section, .scroll-portfolio .story-inner, .scroll-portfolio .hero-layout { pointer-events: none; }
-.scroll-portfolio .site-header, .scroll-portfolio .hero-copy, .scroll-portfolio .story-header, .scroll-portfolio .story-content, .scroll-portfolio .journey-footer, .scroll-portfolio .journey-rail, .scroll-portfolio .scene-tools, .scroll-portfolio .secret-controls { pointer-events: auto; }
+/* Copy does not cover the scene with invisible drag-blocking rectangles. */
+.scroll-portfolio .hero-copy, .scroll-portfolio .story-header,
+.scroll-portfolio .story-content, .scroll-portfolio .journey-footer { pointer-events: none; }
+.scroll-portfolio .site-header, .scroll-portfolio .journey-rail,
+.scroll-portfolio .scene-tools, .scroll-portfolio .secret-controls { pointer-events: auto; }
+.scroll-portfolio .hero-copy :is(a, button),
+.scroll-portfolio .story-header :is(a, button),
+.scroll-portfolio .story-content :is(a, button, .timeline-item, .hobby-card, .fact-card, .empty-chapter),
+.scroll-portfolio .journey-footer :is(a, button) { pointer-events: auto; }
 .scroll-portfolio .journey { width: 100%; position: relative; }
 .scroll-portfolio .story-section { position: relative; min-height: 125svh; padding: clamp(155px, 18svh, 220px) 0 clamp(150px, 18svh, 240px); scroll-margin-top: var(--header-offset); }
 .scroll-portfolio .story-section::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgb(var(--journey-rgb) / .13), transparent); }
 .scroll-portfolio .story-inner { width: min(1280px, 100%); margin: 0 auto; position: relative; }
 .scroll-portfolio .story-header { position: relative; max-width: 680px; margin-bottom: 44px; }
-.scroll-portfolio .story-section[data-world='1'] .story-header,
-.scroll-portfolio .story-section[data-world='3'] .story-header { margin-left: auto; }
+.scroll-portfolio .achievements-world .story-header,
+.scroll-portfolio .facts-world .story-header { margin-left: auto; }
 .scroll-portfolio .universe-eyebrow { font: 500 9px/1.5 var(--sans); letter-spacing: .18em; color: var(--journey-accent); margin-bottom: 23px; text-transform: uppercase; }
 .scroll-portfolio .signal-dot { width: 5px; height: 5px; box-shadow: 0 0 15px rgb(var(--journey-rgb) / .45); background: var(--journey-accent); flex: none; }
 .scroll-portfolio .chapter-kicker { font-size: 9px; letter-spacing: .18em; color: var(--journey-accent); }
@@ -118,16 +126,16 @@
 .scroll-portfolio .story-title em { color: var(--journey-accent); font: 400 1.03em/.99 var(--serif); letter-spacing: -.035em; }
 .scroll-portfolio .story-lead { color: #bdcadd; max-width: 430px; margin-top: 25px; font-size: 14px; line-height: 1.8; white-space: pre-line; text-shadow: 0 2px 20px #070b13; }
 .scroll-portfolio .story-content { position: relative; max-width: 720px; }
-.scroll-portfolio .story-section[data-world='1'] .story-content,
-.scroll-portfolio .story-section[data-world='3'] .story-content { margin-left: auto; }
-.scroll-portfolio .story-section[data-world='2'] .story-content { max-width: 790px; }
+.scroll-portfolio .achievements-world .story-content,
+.scroll-portfolio .facts-world .story-content { margin-left: auto; }
+.scroll-portfolio .hobbies-world .story-content { max-width: 790px; }
 .scroll-portfolio .slide { min-height: 0; outline: 0; }
 .scroll-portfolio .story-content .section-heading { gap: 24px; margin: 0 0 25px; align-items: flex-start; }
 .scroll-portfolio .story-content .section-heading .eyebrow { display: none; }
 .scroll-portfolio .story-content .section-heading h2 { font: 400 33px/1.15 var(--serif); letter-spacing: -.02em; }
 .scroll-portfolio .story-content .section-subtitle { max-width: 280px; font-size: 12px; line-height: 1.7; }
-.scroll-portfolio .story-section[data-world='0'] { min-height: 108svh; padding: clamp(165px, 23svh, 255px) 0 100px; }
-.scroll-portfolio .story-section[data-world='0']::before { display: none; }
+.scroll-portfolio #introduction { min-height: 108svh; padding: clamp(165px, 23svh, 255px) 0 100px; }
+.scroll-portfolio #introduction::before { display: none; }
 .scroll-portfolio .hero-layout { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 5vw; min-height: 62svh; }
 .scroll-portfolio .hero-copy { max-width: 610px; position: relative; z-index: 2; }
 .scroll-portfolio #universe-title { font: 400 clamp(82px, 10.2vw, 160px)/.94 var(--sans); letter-spacing: -.068em; color: #eff4fc; text-shadow: 0 4px 50px #02061073; white-space: normal; }
@@ -153,7 +161,7 @@
   overflow: visible;
   transform: rotate(6deg);
   transform-origin: center;
-  animation: smile-wiggle 8s ease-in-out infinite;
+  animation: none;
   transition: color .18s, scale .18s;
 }
 .scroll-portfolio #home-smile:hover {
@@ -161,6 +169,7 @@
   background: transparent;
   border: 0;
   scale: 1.2;
+  animation: smile-wiggle .7s ease-in-out both;
 }
 .scroll-portfolio #home-smile:active { scale: .88; }
 .scroll-portfolio #home-smile.is-speaking { animation: smile-pop .45s cubic-bezier(.2, .7, .3, 1) both; }
@@ -175,10 +184,10 @@
   animation: smile-spark .75s ease-out both;
 }
 @keyframes smile-wiggle {
-  0%, 79%, 100% { transform: rotate(6deg) translateY(0); }
-  83% { transform: rotate(-8deg) translateY(-2px); }
-  88% { transform: rotate(10deg) translateY(-2px); }
-  93% { transform: rotate(-3deg) translateY(0); }
+  0%, 100% { transform: rotate(6deg) translateY(0); }
+  25% { transform: rotate(-8deg) translateY(-2px); }
+  55% { transform: rotate(10deg) translateY(-2px); }
+  80% { transform: rotate(-3deg) translateY(0); }
 }
 @keyframes smile-pop {
   0% { transform: rotate(6deg) scale(1); }
@@ -302,20 +311,20 @@
 @media (min-width: 1600px) {
   .scroll-portfolio .hero-layout { grid-template-columns: 1.05fr 1fr; }
   .scroll-portfolio .story-content { max-width: 760px; }
-  .scroll-portfolio .story-section[data-world='2'] .story-content { max-width: 800px; }
+  .scroll-portfolio .hobbies-world .story-content { max-width: 800px; }
   .scroll-portfolio .story-lead, .scroll-portfolio .chapter-description { font-size: 15px; }
 }
 @media (max-width: 1150px) {
   .scroll-portfolio { --page-gutter: 5vw; }
   .scroll-portfolio .site-header { padding: 0 18px; gap: 12px; }
   .scroll-portfolio .brand > span { display: none; }
-  .scroll-portfolio .section-nav { gap: 18px; }
+  .scroll-portfolio .section-nav { gap: 14px; }
   .scroll-portfolio .section-nav a { font-size: 10px; }
   .scroll-portfolio .section-nav a span { display: none; }
   .scroll-portfolio .motion-toggle { margin-left: 5px; font-size: 9px; }
   .scroll-portfolio .journey-rail { right: 5px; }
   .scroll-portfolio .story-header, .scroll-portfolio .story-content { max-width: min(690px, 77%); }
-  .scroll-portfolio .story-section[data-world='2'] .story-content { max-width: 77%; }
+  .scroll-portfolio .hobbies-world .story-content { max-width: 77%; }
   .scroll-portfolio #universe-title { font-size: clamp(77px, 10.5vw, 130px); }
 }
 @media (max-width: 850px) {
@@ -334,12 +343,12 @@
   .scroll-portfolio .hero-copy { max-width: 540px; }
   .scroll-portfolio .hero-space { position: absolute; z-index: -1; right: 0; top: 30%; width: 70%; min-height: 400px; height: 56svh; }
   .scroll-portfolio .orbit-label { bottom: 0; right: 0; font-size: 6px; }
-  .scroll-portfolio .story-section[data-world='0'] { min-height: 115svh; padding-top: 185px; padding-bottom: 120px; }
+  .scroll-portfolio #introduction { min-height: 115svh; padding-top: 185px; padding-bottom: 120px; }
   .scroll-portfolio #universe-title { font-size: clamp(87px, 14vw, 120px); }
   .scroll-portfolio .home-greeting { font-size: 16px; }
   .scroll-portfolio .chapter-description { font-size: 13px; }
   .scroll-portfolio .story-section { padding: 155px 0; }
-  .scroll-portfolio .story-header, .scroll-portfolio .story-content, .scroll-portfolio .story-section[data-world='2'] .story-content { max-width: 100%; }
+  .scroll-portfolio .story-header, .scroll-portfolio .story-content, .scroll-portfolio .hobbies-world .story-content { max-width: 100%; }
   .scroll-portfolio .story-header { max-width: 540px; }
   .scroll-portfolio .story-title { font-size: clamp(60px, 10vw, 85px); }
   .scroll-portfolio .scene-tools { bottom: 14px; gap: 13px; }
@@ -355,8 +364,8 @@
   .scroll-portfolio .brand > span { font-size: 5px; letter-spacing: .11em; }
   .scroll-portfolio .motion-toggle { padding: 9px; font-size: 8px; gap: 5px; }
   .scroll-portfolio .section-nav { left: 13px; right: 13px; }
-  .scroll-portfolio .section-nav a { font-size: 9px; letter-spacing: -.02em; }
-  .scroll-portfolio .story-section[data-world='0'] { min-height: 110svh; padding-top: 185px; }
+  .scroll-portfolio .section-nav a { font-size: 8.5px; letter-spacing: -.025em; }
+  .scroll-portfolio #introduction { min-height: 110svh; padding-top: 185px; }
   .scroll-portfolio .hero-layout { min-height: 72svh; align-items: start; }
   .scroll-portfolio #universe-title { font-size: clamp(71px, 19vw, 105px); letter-spacing: -.075em; }
   .scroll-portfolio #universe-title br { display: block; }
@@ -424,7 +433,7 @@
 @media(max-width:760px){.scroll-portfolio .hero-keepsake{bottom:0;right:0;max-width:230px;font-size:9px;padding:8px 12px}.scroll-portfolio .hero-keepsake img{width:38px;height:38px}}
 
 .scroll-portfolio .scene-tools{left:50%;translate:-50% 0;bottom:15px}
-@media(min-width:761px) and (max-height:790px){.scroll-portfolio .story-section[data-world='0']{padding-top:145px}.scroll-portfolio #universe-title{font-size:clamp(82px,9vw,135px)}.scroll-portfolio .home-greeting{margin-top:23px}.scroll-portfolio .scroll-cue{margin-top:28px}}
+@media(min-width:761px) and (max-height:790px){.scroll-portfolio #introduction{padding-top:145px}.scroll-portfolio #universe-title{font-size:clamp(82px,9vw,135px)}.scroll-portfolio .home-greeting{margin-top:23px}.scroll-portfolio .scroll-cue{margin-top:28px}}
 
 .scroll-portfolio .world-backdrop{background:radial-gradient(ellipse at var(--glow-x,73%) 43%,rgb(var(--journey-rgb) / .10),transparent 57%),linear-gradient(125deg,#080c14,#06111f 60%,#080d17)}
 .scroll-portfolio .world-aurora{opacity:.7}
@@ -442,6 +451,98 @@ html.no-motion .scroll-portfolio .smile-particle,
 @media (prefers-reduced-motion: reduce) {
   .scroll-portfolio .reveal-char { opacity: 1; transform: none; transition: none; animation: none; }
   .scroll-portfolio #home-smile { animation: none; transform: none; }
-  .scroll-portfolio #home-smile:hover, .scroll-portfolio #home-smile:active { scale: 1; }
+  .scroll-portfolio #home-smile:hover, .scroll-portfolio #home-smile:active, .scroll-portfolio #home-smile.is-speaking { scale: 1; animation: none; transform: none; }
   .scroll-portfolio .smile-particle { display: none; }
 }
+
+/* Keep photos to the right of their 3D world, just like achievements and facts. */
+.scroll-portfolio #photos.photos-world { min-height: 112svh; }
+.scroll-portfolio #photos.photos-world .story-header,
+.scroll-portfolio #photos.photos-world .story-content {
+  max-width: 720px;
+  margin-left: auto;
+}
+@media (max-width: 1150px) {
+  .scroll-portfolio #photos.photos-world .story-header,
+  .scroll-portfolio #photos.photos-world .story-content { max-width: min(690px, 77%); }
+}
+@media (max-width: 850px) {
+  .scroll-portfolio #photos.photos-world .story-header,
+  .scroll-portfolio #photos.photos-world .story-content { max-width: 100%; }
+}
+
+/* Crisp readable labels follow the actual 3D card faces without intercepting drags. */
+.scroll-portfolio #scene-card-labels.scene-card-label-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+.scroll-portfolio .scene-card-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #f0f6ff;
+  text-align: left;
+  font-family: var(--sans);
+  pointer-events: none;
+  opacity: 0;
+}
+.scroll-portfolio .scene-card-kicker {
+  display: block;
+  flex: none;
+  color: #b8d2f1;
+  font: 600 9.5px/1.4 var(--sans);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.scroll-portfolio .scene-card-title {
+  display: block;
+  max-width: 100%;
+  color: #f0f6ff;
+  font: 700 21px/1.2 var(--sans);
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.scroll-portfolio .scene-card-action {
+  display: block;
+  max-width: calc(100% - 22px);
+  margin-top: auto;
+  color: #b8d2f1;
+  font: 600 10px/1.4 var(--sans);
+  letter-spacing: .025em;
+}
+.scroll-portfolio .scene-card-label > .icon {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 16px;
+  height: 16px;
+  color: #bddcff;
+  flex: none;
+}
+
+.scroll-portfolio .scene-card-label[hidden] { display: none; }
+
+.scroll-portfolio .scene-card-label { padding: calc(12px * var(--card-scale, 1)); gap: calc(10px * var(--card-scale, 1)); }
+.scroll-portfolio .scene-card-kicker { font-size: calc(9.5px * var(--card-scale, 1)); }
+.scroll-portfolio .scene-card-title { font-size: calc(21px * var(--card-scale, 1)); }
+.scroll-portfolio .scene-card-action { font-size: calc(10px * var(--card-scale, 1)); }
+.scroll-portfolio .scene-card-label > .icon { width: calc(16px * var(--card-scale, 1)); height: calc(16px * var(--card-scale, 1)); right: calc(12px * var(--card-scale, 1)); bottom: calc(12px * var(--card-scale, 1)); }
