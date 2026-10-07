@@ -69,6 +69,11 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   let baseDistance = 8;
   let anchor = 0;
   let resolutionScale = 1;
+  let nativePixelRatio = window.devicePixelRatio || 1;
+  let quality = 'active';
+  let qualityUntil = 0;
+  let sharpPending = true;
+  let sharpTimer = 0;
   let slowFrames = 0;
   let animateUntil = 0;
   let needsRender = false;
@@ -798,14 +803,43 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     if (failed || disposed) return;
     failed = true;
     cancelAnimationFrame(raf);
+    clearTimeout(sharpTimer);
+    sharpTimer = 0;
     raf = 0;
     releaseGesture();
     canvas.style.cursor = '';
     onError?.(error instanceof Error ? error : new Error(String(error)));
   }
 
-  function renderOnce() {
-    requestFrame();
+  function renderOnce(duration = 0) {
+    requestFrame(duration);
+  }
+
+  function desiredPixelRatio(sharp) {
+    const cap = sharp ? (resolutionScale < 0.85 ? 1.35 : 1.5) : resolutionScale;
+    return Math.min(nativePixelRatio, cap);
+  }
+
+  function setResolution(sharp, force = false) {
+    quality = sharp ? 'sharp' : 'active';
+    const next = desiredPixelRatio(sharp);
+    if (!force && Math.abs(next - pixelRatio) < 0.001) return;
+    pixelRatio = next;
+    renderer.setPixelRatio(pixelRatio);
+    if (force) renderer.setSize(width, height, false);
+  }
+
+  function scheduleSharpFrame() {
+    if (!sharpPending || disposed || failed || document.hidden || gesture?.dragging || sharpTimer || raf) return;
+    const wait = Math.max(0, qualityUntil - performance.now());
+    if (wait > 1) {
+      sharpTimer = window.setTimeout(() => {
+        sharpTimer = 0;
+        requestFrame();
+      }, wait + 1);
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
   }
 
   function frame(timestamp) {
@@ -813,7 +847,12 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     if (disposed || failed || document.hidden) return;
     const settling = Math.abs(targetScroll - currentScroll) > 0.001 || renderedDrag.distanceToSquared(drag) > 0.000001;
     const animating = motion && (timestamp < animateUntil || settling);
-    if (!needsRender && !animating) return;
+    const sharpening = !animating && !gesture?.dragging && timestamp >= qualityUntil;
+    if (!needsRender && !animating && !sharpPending) return;
+    if (!needsRender && !animating && !sharpening) {
+      scheduleSharpFrame(timestamp);
+      return;
+    }
     const frameInterval = 1000 / 30;
     if (lastFrame && timestamp - lastFrame < frameInterval - 0.6) {
       raf = requestAnimationFrame(frame);
@@ -822,8 +861,12 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const delta = lastFrame ? Math.min(0.08, (timestamp - lastFrame) / 1000) : 0;
     lastFrame = timestamp;
     const start = performance.now();
-    try { applyFrame(delta, animating); } catch (error) { fail(error); return; }
+    try {
+      setResolution(sharpening);
+      applyFrame(delta, animating);
+    } catch (error) { fail(error); return; }
     needsRender = false;
+    sharpPending = !sharpening && desiredPixelRatio(true) > pixelRatio + 0.001;
     const duration = performance.now() - start;
     if (diagnostics) {
       stats.renders += 1;
@@ -835,19 +878,24 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       stats.lines = counts.lines;
       stats.points = counts.points;
     }
-    slowFrames = duration > 16 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+    slowFrames = !sharpening && duration > 16 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
     if (slowFrames >= 6 && resolutionScale > 0.65) {
       resolutionScale = Math.max(0.65, resolutionScale - 0.1);
       slowFrames = 0;
-      resize();
+      sharpPending = desiredPixelRatio(true) > desiredPixelRatio(false) + 0.001;
     }
     const continuing = motion && (timestamp < animateUntil || Math.abs(targetScroll - currentScroll) > 0.001 || renderedDrag.distanceToSquared(drag) > 0.000001);
     if ((needsRender || continuing) && !raf) raf = requestAnimationFrame(frame);
+    else scheduleSharpFrame(timestamp);
   }
 
   function requestFrame(duration = 0) {
     if (disposed || failed) return;
+    clearTimeout(sharpTimer);
+    sharpTimer = 0;
     needsRender = true;
+    sharpPending = true;
+    if (duration > 0) qualityUntil = Math.max(qualityUntil, performance.now() + duration);
     if (motion && duration > 0) animateUntil = Math.max(animateUntil, performance.now() + duration);
     if (!document.hidden && !raf) raf = requestAnimationFrame(frame);
   }
@@ -862,16 +910,15 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const nextWidth = Math.max(1, bounds.width);
     const nextHeight = Math.max(1, bounds.height);
     const nextMobile = nextWidth < 760 || nextWidth / nextHeight < 0.95;
-    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, resolutionScale);
+    const nextNativePixelRatio = window.devicePixelRatio || 1;
     canvasLeft = bounds.left;
     canvasTop = bounds.top;
-    if (nextWidth === width && nextHeight === height && nextPixelRatio === pixelRatio && ready) return;
+    if (nextWidth === width && nextHeight === height && nextNativePixelRatio === nativePixelRatio && ready) return;
     width = nextWidth;
     height = nextHeight;
     mobile = nextMobile;
-    pixelRatio = nextPixelRatio;
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(width, height, false);
+    nativePixelRatio = nextNativePixelRatio;
+    setResolution(false, true);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
@@ -879,7 +926,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     baseDistance = mobile ? Math.max(8.3, 5.25 / (2 * tangent * camera.aspect)) : Math.max(7.8, 5.7 / (2 * tangent * camera.aspect));
     const viewWidth = 2 * tangent * baseDistance * camera.aspect;
     anchor = mobile ? 0 : viewWidth * 0.225;
-    renderOnce();
+    renderOnce(120);
   }
 
   function raycast(event) {
@@ -969,6 +1016,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   function visibilityChange() {
     cancelAnimationFrame(raf);
     raf = 0;
+    clearTimeout(sharpTimer);
+    sharpTimer = 0;
     lastFrame = 0;
     releaseGesture();
     if (!document.hidden) renderOnce();
@@ -1019,7 +1068,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
           lastLines: stats.lines,
           lastPoints: stats.points,
           pixelRatio,
-          idle: !raf,
+          idle: !raf && !sharpTimer,
+          quality,
           motion
         }));
         statsWindow = { renders: stats.renders, milliseconds: stats.milliseconds };
@@ -1035,7 +1085,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       const next = clampScroll(value);
       if (Math.abs(next - targetScroll) < 0.00005) return;
       targetScroll = next;
-      if (!motion) renderOnce();
+      if (!motion) renderOnce(120);
       else resume();
     },
     setChapter(index) {
@@ -1043,7 +1093,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       const next = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 4);
       if (next === targetScroll) return;
       targetScroll = next;
-      if (!motion) renderOnce();
+      if (!motion) renderOnce(120);
       else resume();
     },
     setMotion(enabled) {
@@ -1078,6 +1128,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       if (disposed) return;
       disposed = true;
       cancelAnimationFrame(raf);
+      clearTimeout(sharpTimer);
+      sharpTimer = 0;
       if (statsTimer) window.clearInterval(statsTimer);
       releaseGesture();
       observer?.disconnect();
