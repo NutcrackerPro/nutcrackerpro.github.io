@@ -662,3 +662,6 @@ html.no-motion .scroll-portfolio .smile-particle,
     border-radius: 14px;
   }
 }
+
+/* Start the letter reveal as the startup opens, rather than behind its cover. */
+.scroll-portfolio.boot-active:not(.boot-exiting) .reveal-char { animation: none !important; opacity: 0; }
