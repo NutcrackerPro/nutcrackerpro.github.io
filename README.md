@@ -1,6 +1,6 @@
 # Nutcracker's Portfolio
 
-An interactive 3D personal universe with four chapters: Self introduction, Achievements, Hobbies, and Random facts. Drag the gallery to rotate it, click a floating chapter to read it, or use the navigation and arrow controls. The 3D sculpture, particles, lights and chapter panels use locally bundled Three.js 0.180.0 under its MIT license. A static photo view appears when WebGL is unavailable. Motion can be turned off and device reduced-motion preferences are respected. Award photos open at full size. Content and the existing editor still use portfolio.json without any schema migration.
+A continuous scroll-driven 3D journey through Self introduction, Achievements, Hobbies, and Random facts. Scrolling flies the camera through four geometry worlds: chrome orbits, an icy constellation, cyan portals, and a deep-blue tunnel. Background light and accent colors blend along the journey. Drag horizontally in the open scene to orbit it, or click a floating chapter token to jump to a section. All chapters are readable inline, with expanding hobby cards, fact reveals, full-size certificate photos and subtle card depth. The graphics use locally bundled Three.js 0.180.0 under its MIT license. A static penguin view appears if WebGL is unavailable. Motion can be turned off; device reduced-motion preferences are respected. Existing content and editor use portfolio.json without a schema migration.
 
 ## Hosting
 
@@ -29,7 +29,7 @@ Edit the smiley’s messages in the **Smiley phrases** section. Add, remove and 
 
 ## Interactions
 
-Sections assemble on navigation with typed headings, staggered content and an artwork reveal. This is a visual transition; it does not call an AI service or incur API costs. Use the top navigation, arrow buttons or keyboard arrows to switch sections. Hobby cards expand and random-fact cards reveal their answers. Motion can be disabled and device reduced-motion preferences are respected.
+Sections reveal as they enter the viewport. Camera position, 3D worlds and background colors respond to scroll position. These visual effects run locally without an AI service or API cost. Use the header or side dots to jump between worlds. Hobby cards expand and fact cards reveal their answers. Motion off removes continuous animation while retaining static views of every world. The penguin secret mode pauses scrolling and navigation until cancelled.
 
 ## Assets
 
