@@ -21,12 +21,18 @@
   touch-action: none;
   outline: none;
   opacity: 1;
-  transition: opacity .24s ease;
+  transform: translateY(0);
+  transition: opacity .7s cubic-bezier(.2, .6, .3, 1), transform .7s cubic-bezier(.2, .6, .3, 1);
   isolation: isolate;
 }
 .nut-boot::backdrop { background: transparent; }
 .nut-boot *, .nut-boot *::before, .nut-boot *::after { box-sizing: border-box; }
-.nut-boot.is-leaving { opacity: 0; pointer-events: none; }
+.nut-boot.is-leaving { opacity: 0; transform: translateY(-30px); pointer-events: none; }
+/* The portfolio appears underneath while its 3D scene remains still. */
+body.boot-active :is(.site-shell, .scene-wrap, .journey-rail, .scene-tools) { opacity: 0; }
+body.boot-active .journey { transform: translateY(18px); }
+body.boot-active.boot-exiting :is(.site-shell, .scene-wrap, .journey-rail, .scene-tools) { opacity: 1; transition: opacity .65s cubic-bezier(.2, .6, .3, 1); }
+body.boot-active.boot-exiting .journey { transform: translateY(0); transition: transform .65s cubic-bezier(.2, .6, .3, 1); }
 .boot-grid {
   position: absolute;
   inset: 0;
@@ -47,14 +53,14 @@
 .boot-connection > span, .boot-footer i { display: block; width: 4px; height: 4px; border-radius: 50%; background: #b2dbef; box-shadow: 0 0 7px #78c6f566; }
 .boot-layout { display: grid; grid-template-columns: 1fr minmax(280px, 1.8fr) 1fr; align-items: center; gap: clamp(20px, 4vw, 70px); max-width: 1320px; width: 100%; margin: auto; padding: 10px 0; }
 .boot-center { display: flex; flex-direction: column; align-items: center; min-width: 0; }
-.boot-core { position: relative; width: min(43vw, 490px, calc(100svh - 270px)); aspect-ratio: 1; min-width: 245px; display: grid; place-items: center; }
+.boot-core { position: relative; width: min(43vw, 490px, calc(100svh - 270px)); aspect-ratio: 1; min-width: 245px; display: grid; place-items: center; transition: transform .7s cubic-bezier(.2, .6, .3, 1); }
+.nut-boot.is-leaving .boot-core { transform: scale(1.08); }
 .boot-core::before { content: ''; position: absolute; inset: 17%; border-radius: 50%; background: radial-gradient(circle, #91c2e20a, transparent 68%); pointer-events: none; }
 .boot-hud { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .boot-orbit-static { stroke: #719dc0; stroke-width: 1; stroke-opacity: .15; }
 .boot-orbit-a, .boot-orbit-b { transform-origin: 250px 250px; }
 .boot-orbit-a { animation: boot-orbit 14s linear infinite; }
 .boot-orbit-b { animation: boot-orbit 23s linear reverse infinite; opacity: .6; }
-.is-ready .boot-orbit-a, .is-ready .boot-orbit-b { animation-play-state: paused; }
 .boot-core-copy { position: relative; z-index: 1; width: 77%; text-align: center; padding: 30px 0; }
 .boot-core-eyebrow { font-size: 7px; letter-spacing: .38em; color: #77a6cd; }
 .boot-name { margin: 17px 0 15px; font-size: clamp(29px, 3.8vw, 54px); font-weight: 400; line-height: 1.05; letter-spacing: -.045em; color: #e8f5ff; text-shadow: 0 0 25px #85caff24; overflow-wrap: anywhere; }
@@ -66,14 +72,13 @@
 .nut-boot[style*="--boot-completed: 2"] .boot-bootline > span,
 .nut-boot.is-ready .boot-bootline > span { background: #91c6eb; }
 .boot-status { height: 20px; margin: 2px 0 0; font-size: 11px; color: #9fbacf; line-height: 1.6; letter-spacing: .025em; }
-.boot-entry { display: flex; flex-direction: column; align-items: center; gap: 14px; height: 93px; margin-top: 17px; }
+.boot-entry { display: flex; flex-direction: column; align-items: center; height: 93px; margin-top: 17px; }
 .boot-entry[hidden] { display: block; visibility: hidden; }
-.boot-scroll-prompt { display: inline-flex; align-items: center; gap: 8px; font-size: 10px; color: #b2cce2; letter-spacing: .025em; }
-.boot-scroll-prompt svg { width: 17px; height: 17px; }
-.boot-enter { appearance: none; display: flex; align-items: center; justify-content: center; gap: 22px; min-height: 42px; padding: 10px 18px; border: 1px solid #91badd4d; border-radius: 25px; background: #182b3d; color: #ddf0ff; font: 500 10px/1.5 var(--sans, system-ui, sans-serif); letter-spacing: .03em; cursor: pointer; transition: background-color .2s, border-color .2s; }
-.boot-enter svg { width: 17px; height: 17px; }
-.boot-enter:hover { background: #23425c; border-color: #b1d5f091; }
-.boot-enter:focus-visible { outline: 2px solid #b7e2ff; outline-offset: 4px; }
+.boot-enter { appearance: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 72px; padding: 7px 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #b2cce2; font: 500 10px/1.5 var(--sans, system-ui, sans-serif); letter-spacing: .025em; cursor: pointer; transition: color .2s; }
+.boot-enter svg { width: 28px; height: 28px; color: #cbeaff; }
+.boot-enter:hover { color: #edf8ff; background: transparent; border: 0; }
+.boot-enter:focus-visible { outline: none; color: #edf8ff; }
+.boot-enter:focus-visible > span { text-decoration: underline; text-underline-offset: 5px; }
 .boot-telemetry { width: 100%; max-width: 210px; color: #88a9c5; font-size: 9px; line-height: 1.6; }
 .boot-telemetry-left { justify-self: start; }
 .boot-telemetry-right { justify-self: end; max-width: 160px; }
@@ -123,13 +128,16 @@
   .boot-name { font-size: clamp(22px, 4vw, 36px); margin: 9px 0; }
   .boot-bootline { margin-top: 12px; }
   .boot-status { font-size: 9px; margin-top: 0; }
-  .boot-entry { height: 65px; margin-top: 8px; gap: 5px; }
-  .boot-scroll-prompt { font-size: 9px; }
-  .boot-enter { min-height: 34px; padding: 6px 16px; }
+  .boot-entry { height: 65px; margin-top: 8px; }
+  .boot-enter { min-height: 58px; padding: 4px 14px; font-size: 9px; gap: 5px; }
+  .boot-enter svg { width: 24px; height: 24px; }
   .boot-telemetry { display: none; }
   .boot-layout { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .nut-boot, .nut-boot * { animation: none !important; transition: none !important; }
+  body.boot-active.boot-exiting :is(.site-shell, .scene-wrap, .journey-rail, .scene-tools, .journey) { transition: none !important; }
 }
 .no-motion .nut-boot *, .no-motion .nut-boot { animation: none !important; transition: none !important; }
+.no-motion body.boot-active.boot-exiting :is(.site-shell, .scene-wrap, .journey-rail, .scene-tools, .journey),
+body.no-motion.boot-active.boot-exiting :is(.site-shell, .scene-wrap, .journey-rail, .scene-tools, .journey) { transition: none !important; }
