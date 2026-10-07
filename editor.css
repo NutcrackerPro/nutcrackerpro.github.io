@@ -3,3 +3,5 @@
 .publish-help kbd{font:inherit;overflow-wrap:anywhere}.publish-help a{text-decoration:underline}.repeat-card-head h3{overflow-wrap:anywhere;min-width:0}
 
 .collection-editor-note{background:#162235;border-left:2px solid #9bc5e7;padding:14px 17px;font-size:13px;line-height:1.7;color:#bdcadb;margin:0 0 18px}.collection-preview-link{display:inline-flex;align-items:center;gap:12px;color:#a8d6f6;font-size:13px;border-bottom:1px solid #a8d6f650;padding-bottom:6px;margin-bottom:18px}.collection-preview-link:hover{color:#fff}.collection-preview-link span{font-family:Arial,sans-serif}
+
+.audio-field{margin-top:8px;margin-bottom:24px;padding:18px;background:#162236;border:1px solid #3f5675}.audio-preview{display:block;width:min(100%,470px);height:42px;margin:0 0 19px}.audio-field label{margin-bottom:18px}.audio-field .audio-upload{max-width:100%}.audio-clear{font-size:12px;padding:9px 13px;margin-bottom:20px}.audio-field .field-help{margin:0;color:#b9c9df;line-height:1.7}.audio-field input:disabled{opacity:.5}.audio-preview[hidden]{display:none}
