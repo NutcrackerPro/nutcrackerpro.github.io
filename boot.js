@@ -1,9 +1,16 @@
-/* A short, lightweight startup. The portfolio controls when its content and scene are ready. */
-export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, minimumDuration = 1100 } = {}) {
+/* Startup and the portfolio share one scene and one native scrolling journey. */
+export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, onProgress = () => {}, minimumDuration = 1100 } = {}) {
   const startedAt = performance.now();
   const duration = Math.max(0, Number(minimumDuration) || 0);
   const previousOverflow = document.body.style.overflow;
+  const previousOverflowAnchor = document.body.style.overflowAnchor;
+  const previousProgress = document.body.style.getPropertyValue('--boot-progress');
+  const previousScrollRestoration = history.scrollRestoration;
   const previouslyFocused = document.activeElement;
+  const spacer = document.createElement('div');
+  spacer.id = 'startup-stage';
+  spacer.setAttribute('aria-hidden', 'true');
+  document.body.prepend(spacer);
   const screen = document.createElement('dialog');
   screen.className = 'nut-boot';
   screen.setAttribute('role', 'dialog');
@@ -56,6 +63,10 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
   document.body.append(screen);
   document.body.classList.add('boot-active');
   document.body.style.overflow = 'hidden';
+  document.body.style.overflowAnchor = 'none';
+  document.body.style.setProperty('--boot-progress', '0');
+  history.scrollRestoration = 'manual';
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   const nameNode = screen.querySelector('.boot-name');
   const status = screen.querySelector('.boot-status');
   const entry = screen.querySelector('.boot-entry');
@@ -67,8 +78,24 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
   let entered = false;
   let destroyed = false;
   let readinessTimer = 0;
-  let exitTimer = 0;
-  let touchStartY = null;
+  let scrollFrame = 0;
+  let distance = 0;
+  let lastProgress = -1;
+  const backgroundInert = new Map();
+
+  function protectBackground() {
+    for (const node of document.body.children) {
+      if (!(node instanceof HTMLElement) || node === screen || node === spacer ||
+          node.matches('.scene-wrap, .world-backdrop, script, style, link, noscript') || backgroundInert.has(node)) continue;
+      backgroundInert.set(node, node.inert);
+      node.inert = true;
+    }
+  }
+  const backgroundObserver = new MutationObserver(() => {
+    if (!destroyed && !entered) protectBackground();
+  });
+  protectBackground();
+  backgroundObserver.observe(document.body, { childList: true });
 
   function setName(nextName) {
     const cleanName = String(nextName || 'Nutcracker').trim() || 'Nutcracker';
@@ -104,73 +131,157 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
     status.textContent = 'Ready when you are.';
     footerState.textContent = 'SYSTEM ONLINE — NC/01';
     entry.hidden = false;
+    // Only the real loading phase is modal. From here the browser owns scrolling.
+    screen.close();
+    screen.show();
+    screen.setAttribute('aria-modal', 'false');
+    document.body.style.overflow = previousOverflow;
+    screen.removeEventListener('wheel', onLoadingWheel);
+    screen.removeEventListener('touchmove', onLoadingTouchMove);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    distance = measureDistance();
+    applyProgress(0);
     enterButton.focus({ preventScroll: true });
   }
 
-  function releaseScreen() {
+  function restorePage() {
     document.body.style.overflow = previousOverflow;
+    document.body.style.overflowAnchor = previousOverflowAnchor;
+    if (previousProgress) document.body.style.setProperty('--boot-progress', previousProgress);
+    else document.body.style.removeProperty('--boot-progress');
+    history.scrollRestoration = previousScrollRestoration;
     document.body.classList.remove('boot-active', 'boot-exiting');
     document.body.classList.add('boot-done');
+    backgroundObserver.disconnect();
+    for (const [node, previousInert] of backgroundInert) node.inert = previousInert;
+    backgroundInert.clear();
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected && !previouslyFocused.closest('[inert]')) {
       previouslyFocused.focus({ preventScroll: true });
     }
   }
 
-  function enter() {
-    if (!ready || entered || destroyed) return;
-    entered = true;
-    document.body.classList.add('boot-exiting');
-    screen.classList.add('is-leaving');
-    // Reveal the still scene during the exit, then restore its interaction.
-    exitTimer = window.setTimeout(() => {
-      if (destroyed) return;
-      screen.remove();
-      releaseScreen();
-      onEnter();
-    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('no-motion') || document.body.classList.contains('no-motion') ? 0 : 700);
+  function reducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      document.documentElement.classList.contains('no-motion') || document.body.classList.contains('no-motion');
   }
 
-  function onWheel(event) {
+  function measureDistance() {
+    return Math.max(1, spacer.getBoundingClientRect().height || window.innerHeight);
+  }
+
+  function applyProgress(progress) {
+    const p = Math.max(0, Math.min(1, progress));
+    const value = p.toFixed(5);
+    document.body.style.setProperty('--boot-progress', value);
+    screen.style.setProperty('--boot-progress', value);
+    screen.dataset.progress = value;
+    document.body.classList.toggle('boot-exiting', p > 0);
+    if (Math.abs(p - lastProgress) > .00001) {
+      lastProgress = p;
+      onProgress(p);
+    }
+  }
+
+  function removeListeners() {
+    if (scrollFrame) cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+    window.removeEventListener('scroll', onNativeScroll);
+    window.removeEventListener('resize', onResize);
+    screen.removeEventListener('wheel', onLoadingWheel);
+    screen.removeEventListener('touchmove', onLoadingTouchMove);
+    screen.removeEventListener('keydown', onKeyDown);
+    screen.removeEventListener('cancel', onCancel);
+    enterButton.removeEventListener('click', requestEntry);
+  }
+
+  function finish() {
+    if (!ready || entered || destroyed) return;
+    entered = true;
+    const oldScrollY = window.scrollY;
+    const removedHeight = distance || measureDistance();
+    applyProgress(1);
+    removeListeners();
+    screen.remove();
+    spacer.remove();
+    // Keep the portfolio at the same visual position after removing the startup section.
+    window.scrollTo({ top: Math.max(0, oldScrollY - removedHeight), left: 0, behavior: 'instant' });
+    restorePage();
+    onEnter();
+  }
+
+  function requestEntry() {
+    if (!ready || entered || destroyed) return;
+    if (reducedMotion()) {
+      finish();
+      return;
+    }
+    distance = measureDistance();
+    window.scrollTo({ top: distance, left: 0, behavior: 'smooth' });
+  }
+
+  function updateScrollProgress() {
+    scrollFrame = 0;
+    if (!ready || entered || destroyed) return;
+    distance = measureDistance();
+    const p = Math.max(0, Math.min(1, window.scrollY / distance));
+    applyProgress(p);
+    if (p >= 1) finish();
+  }
+
+  function onNativeScroll() {
+    if (entered || destroyed) return;
+    if (!ready) {
+      if (window.scrollY !== 0) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      return;
+    }
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(updateScrollProgress);
+  }
+
+  function onResize() {
+    if (ready && !entered && !destroyed && !scrollFrame) scrollFrame = requestAnimationFrame(updateScrollProgress);
+  }
+
+  function onLoadingWheel(event) {
+    if (ready) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (ready && event.deltaY > 8) enter();
   }
-  function onTouchStart(event) {
-    touchStartY = event.touches[0]?.clientY ?? null;
-  }
-  function onTouchMove(event) {
+  function onLoadingTouchMove(event) {
+    if (ready) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (ready && touchStartY !== null && event.touches[0] && touchStartY - event.touches[0].clientY > 28) enter();
   }
   function onKeyDown(event) {
     if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' ', 'Enter'].includes(event.key)) {
-      event.preventDefault();
       event.stopImmediatePropagation();
-      if (ready && ['ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) enter();
-    } else if (event.key === 'Tab' && !ready) {
+      if (!ready) event.preventDefault();
+      else if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        requestEntry();
+      }
+      // Arrow and page keys retain their native, reversible scrolling behavior.
+    } else if (event.key === 'Tab') {
       event.preventDefault();
-    } else if (event.key === 'Tab' && ready) {
-      // The startup is a dialog with one action; keep focus inside until entered.
-      event.preventDefault();
-      enterButton.focus();
+      if (ready) enterButton.focus({ preventScroll: true });
     }
   }
   function onCancel(event) {
     // Escape must not remove the startup while leaving the page locked.
     event.preventDefault();
   }
-  screen.addEventListener('wheel', onWheel, { passive: false });
-  screen.addEventListener('touchstart', onTouchStart, { passive: true });
-  screen.addEventListener('touchmove', onTouchMove, { passive: false });
+  screen.addEventListener('wheel', onLoadingWheel, { passive: false });
+  screen.addEventListener('touchmove', onLoadingTouchMove, { passive: false });
   screen.addEventListener('keydown', onKeyDown);
   screen.addEventListener('cancel', onCancel);
-  enterButton.addEventListener('click', enter);
+  window.addEventListener('scroll', onNativeScroll, { passive: true });
+  window.addEventListener('resize', onResize, { passive: true });
+  enterButton.addEventListener('click', requestEntry);
   setName(name);
   screen.showModal();
   screen.focus({ preventScroll: true });
 
   return {
+    get finished() { return entered; },
     markSceneReady() {
       if (destroyed || sceneReady) return;
       sceneReady = true;
@@ -188,16 +299,14 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
       if (destroyed) return;
       destroyed = true;
       clearTimeout(readinessTimer);
-      clearTimeout(exitTimer);
-      screen.removeEventListener('wheel', onWheel);
-      screen.removeEventListener('touchstart', onTouchStart);
-      screen.removeEventListener('touchmove', onTouchMove);
-      screen.removeEventListener('keydown', onKeyDown);
-      screen.removeEventListener('cancel', onCancel);
-      enterButton.removeEventListener('click', enter);
-      if (screen.isConnected) {
+      removeListeners();
+      if (!entered) {
+        const oldScrollY = window.scrollY;
+        const removedHeight = distance || measureDistance();
         screen.remove();
-        releaseScreen();
+        spacer.remove();
+        window.scrollTo({ top: Math.max(0, oldScrollY - removedHeight), left: 0, behavior: 'instant' });
+        restorePage();
       }
     }
   };
