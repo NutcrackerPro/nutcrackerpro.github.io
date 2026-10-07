@@ -3,11 +3,11 @@ import * as THREE from './vendor/three.module.js';
 /** Five scroll-connected worlds. Portfolio copy and accessible navigation remain in the DOM. */
 export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCardLayout } = {}) {
   const noop = () => {};
-  const empty = { setScroll: noop, setChapter: noop, setMotion: noop, setLocked: noop, resetView: noop, dispose: noop };
+  const empty = { setScroll: noop, setChapter: noop, setMotion: noop, setLocked: noop, setStartupProgress: noop, setStartupMotion: noop, resetView: noop, dispose: noop };
   let renderer;
   try {
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('A canvas is required for the 3D view.');
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: window.innerWidth >= 760, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
   } catch (error) {
     onError?.(error);
     return empty;
@@ -39,6 +39,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   const cards = [];
   const pickMeshes = [];
   const textures = new Set();
+  const decorations = [];
   const panelRects = { value: Array.from({ length: 3 }, () => new THREE.Vector4()) };
   const panelVisibility = { value: new THREE.Vector3() };
   const panelRadius = { value: 10 };
@@ -68,16 +69,12 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   let canvasTop = 0;
   let baseDistance = 8;
   let anchor = 0;
-  let resolutionScale = 1;
-  let idleResolutionScale = 1;
-  let idleFrameRate = 24;
   let nativePixelRatio = window.devicePixelRatio || 1;
-  let quality = 'active';
-  let qualityUntil = 0;
-  let sharpPending = true;
-  let sharpTimer = 0;
+  const quality = 'sharp';
+  let decorationLevel = 0;
+  let startupProgress = 1;
+  let startupMotion = false;
   let slowFrames = 0;
-  let animateUntil = 0;
   let needsRender = false;
   let lastHover = 0;
   let statsTimer;
@@ -87,6 +84,17 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   const spacing = 9;
   const smoothstep = (start, end, value) => THREE.MathUtils.smoothstep(value, start, end);
   const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 4);
+  const automaticMotion = () => (motion && !locked) || startupMotion;
+
+  function decorative(object, threshold = 1) {
+    decorations.push({ object, threshold });
+    return object;
+  }
+
+  function reduceDecorations() {
+    decorationLevel = Math.min(2, decorationLevel + 1);
+    for (const { object, threshold } of decorations) object.visible = decorationLevel < threshold;
+  }
 
   scene.add(new THREE.HemisphereLight(0xd6e8ff, 0x061127, 2.2));
   const key = new THREE.DirectionalLight(0xf0f7ff, 4.1);
@@ -237,6 +245,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     sprite.scale.set(size, size, 1);
     if (position) sprite.position.copy(position);
     parent.add(sprite);
+    decorative(sprite);
     return sprite;
   }
 
@@ -313,6 +322,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     }
     world.group.add(flecks);
     world.flecks = flecks;
+    decorative(flecks);
   }
 
   const photoFrames = [];
@@ -341,7 +351,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
         bars.setMatrixAt(index, framePose.matrix);
       });
       frame.add(bars);
-      frame.add(new THREE.LineSegments(gridGeometry, new THREE.LineBasicMaterial({ color: 0x92b3ff, transparent: true, opacity: 0.19, depthWrite: false, blending: THREE.AdditiveBlending })));
+      frame.add(decorative(new THREE.LineSegments(gridGeometry, new THREE.LineBasicMaterial({ color: 0x92b3ff, transparent: true, opacity: 0.19, depthWrite: false, blending: THREE.AdditiveBlending }))));
       const x = [-1.08, 0.15, 1.26][i];
       const y = [0.63, -0.47, 0.54][i];
       frame.position.set(x, y, -i * 0.82);
@@ -361,7 +371,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    world.group.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, color: 0xb0caff, size: 0.055, transparent: true, opacity: 0.65, depthWrite: false, blending: THREE.AdditiveBlending })));
+    world.group.add(decorative(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, color: 0xb0caff, size: 0.055, transparent: true, opacity: 0.65, depthWrite: false, blending: THREE.AdditiveBlending })), 2));
   }
 
   const crystals = [];
@@ -394,6 +404,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     world.rings = [ring1, ring2];
     const points = [];
     const nodes = [];
+    const constellation = new THREE.Group();
+    world.group.add(decorative(constellation));
     for (let i = 0; i < 10; i++) {
       const angle = i / 10 * Math.PI * 2;
       nodes.push(new THREE.Vector3(Math.cos(angle) * (2.45 + i % 2 * 0.32), Math.sin(angle) * 2.0, -1.1 - Math.sin(angle * 3) * 0.42));
@@ -403,9 +415,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       if (i % 2 === 0) points.push(nodes[i], nodes[(i + 4) % nodes.length]);
       const moon = new THREE.Mesh(new THREE.SphereGeometry(i % 3 === 0 ? 0.046 : 0.024, 8, 6), lightMaterial(0xc0e9ff, 0.9));
       moon.position.copy(nodes[i]);
-      world.group.add(moon);
+      constellation.add(moon);
     }
-    world.group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x7cbdff, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending })));
+    constellation.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x7cbdff, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending })));
   }
 
   let waveGeometry;
@@ -455,7 +467,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     wavePointGeometry = new THREE.BufferGeometry();
     wavePointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     waveBounds(wavePointGeometry);
-    world.group.add(new THREE.Points(wavePointGeometry, animateWave(new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false }))));
+    world.group.add(decorative(new THREE.Points(wavePointGeometry, animateWave(new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false }))), 2));
     halo(world.group, 0x00d5ff, 4.8, 0.16, new THREE.Vector3(0.3, 0.0, -3.5));
     for (let i = 0; i < 3; i++) {
       const portal = new THREE.Group();
@@ -474,7 +486,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
         tickPose.updateMatrix();
         ticks.setMatrixAt(j, tickPose.matrix);
       }
-      portal.add(ticks);
+      portal.add(decorative(ticks, 2));
       world.group.add(portal);
       portals.push(portal);
     }
@@ -495,6 +507,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     }
     world.group.add(paths);
     world.paths = paths;
+    decorative(paths);
   }
 
   const tunnelRings = [];
@@ -530,7 +543,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
         const twist = a + j * 0.16;
         points.push(new THREE.Vector3(Math.cos(twist) * 2.37 + Math.sin(j * 0.47) * 0.38, Math.sin(twist) * 2.06 + Math.cos(j * 0.43) * 0.23, 3 - j * 2));
       }
-      pathTube(world.group, points, 0.004, lightMaterial(0x7e7fb8, 0.17));
+      decorative(pathTube(world.group, points, 0.004, lightMaterial(0x7e7fb8, 0.17)));
     }
     factCore = new THREE.Group();
     factCore.position.set(0.04, 0.1, -0.8);
@@ -555,7 +568,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    world.group.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.050, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, blending: THREE.AdditiveBlending })));
+    world.group.add(decorative(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.050, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, blending: THREE.AdditiveBlending })), 2));
   }
 
   function makeStars() {
@@ -572,7 +585,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    stars.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.055, vertexColors: true, transparent: true, opacity: 0.87, depthWrite: false, blending: THREE.AdditiveBlending })));
+    stars.add(decorative(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.055, vertexColors: true, transparent: true, opacity: 0.87, depthWrite: false, blending: THREE.AdditiveBlending })), 2));
     // Sparse longer streaks make the camera travel legible without flashing lights.
     const streaks = [];
     for (let i = 0; i < 42; i++) {
@@ -583,7 +596,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     }
     const lines = new THREE.BufferGeometry();
     lines.setAttribute('position', new THREE.Float32BufferAttribute(streaks, 3));
-    stars.add(new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x6c8ebc, transparent: true, opacity: 0.17, blending: THREE.AdditiveBlending, depthWrite: false })));
+    stars.add(decorative(new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x6c8ebc, transparent: true, opacity: 0.17, blending: THREE.AdditiveBlending, depthWrite: false }))));
   }
 
   function roundedRect(context, x, y, w, h, radius) {
@@ -636,6 +649,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const group = new THREE.Group();
     const geometry = new THREE.PlaneGeometry(2.08, 0.845);
     const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 1, depthWrite: false, depthTest: false, toneMapped: false, fog: false }));
+    face.visible = typeof onCardLayout !== 'function';
     face.renderOrder = 10;
     face.userData.chapter = index;
     face.userData.card = group;
@@ -667,8 +681,10 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     currentScroll += (targetScroll - currentScroll) * smoothing;
     if (gesture?.dragging) renderedDrag.copy(drag);
     else renderedDrag.lerp(drag, smoothing);
-    const section = Math.min(worlds.length - 2, Math.floor(currentScroll));
-    const blend = smoothstep(0, 1, currentScroll - section);
+    const viewScroll = currentScroll * startupProgress;
+    const startup = 1 - startupProgress;
+    const section = Math.min(worlds.length - 2, Math.floor(viewScroll));
+    const blend = smoothstep(0, 1, viewScroll - section);
     accent.copy(palette[section]).lerp(palette[section + 1], blend);
     backdrop.copy(backgrounds[section]).lerp(backgrounds[section + 1], blend);
     renderer.setClearColor(backdrop, 0);
@@ -676,31 +692,38 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     rim.color.copy(accent);
     fill.color.copy(accent);
 
-    const flight = -currentScroll * spacing;
-    const pathX = Math.sin(currentScroll * Math.PI * 0.75) * 0.32;
-    const pathY = Math.sin(currentScroll * Math.PI) * 0.28;
-    const distance = baseDistance * (1 - Math.sin(currentScroll * Math.PI) * 0.035);
+    const flight = -viewScroll * spacing;
+    const pathX = Math.sin(viewScroll * Math.PI * 0.75) * 0.32;
+    const pathY = Math.sin(viewScroll * Math.PI) * 0.28;
+    const normalDistance = baseDistance * (1 - Math.sin(viewScroll * Math.PI) * 0.035);
+    const bootDistance = baseDistance * 0.98;
+    const distance = THREE.MathUtils.lerp(bootDistance, normalDistance, startupProgress);
     camera.position.set(pathX, pathY + 0.10, flight + distance);
     lookTarget.set(pathX, pathY * 0.38, flight - 0.4);
     camera.lookAt(lookTarget);
     const worldSides = [1, -1, -1, 1, -1];
     const side = THREE.MathUtils.lerp(worldSides[section], worldSides[Math.min(section + 1, worlds.length - 1)], blend);
-    gallery.position.x = anchor * side;
-    gallery.position.y = mobile ? -2.15 : 0;
+    gallery.position.x = anchor * side * startupProgress;
+    const bootY = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * bootDistance * 0.10;
+    gallery.position.y = THREE.MathUtils.lerp(bootY, mobile ? -2.15 : 0, startupProgress);
     // Independent worlds keep the path continuous while their silhouettes change completely.
     for (let i = 0; i < worlds.length; i++) {
       const world = worlds[i];
-      const difference = currentScroll - i;
+      const difference = viewScroll - i;
       const weight = 1 - smoothstep(0.08, 0.96, Math.abs(difference));
       updateWorldWeight(world, weight);
       if (!world.group.visible) continue;
       world.group.rotation.x = renderedDrag.x + Math.sin(time * 0.15 + i) * 0.020;
       world.group.rotation.y = renderedDrag.y + Math.sin(time * 0.12 + i * 1.5) * 0.025;
+      if (i === 0) {
+        world.group.rotation.x += startup * 0.20;
+        world.group.rotation.y += startup * (-0.40 + time * 0.12);
+      }
       world.group.position.y = difference * 0.14;
-      world.group.scale.setScalar(mobile ? 0.86 : 1);
+      world.group.scale.setScalar(THREE.MathUtils.lerp(0.80, mobile ? 0.86 : 1, startupProgress));
     }
     if (worlds[0].group.visible) {
-      introKnot.rotation.y = 0.08 + time * 0.095 + currentScroll * 0.38;
+      introKnot.rotation.y = 0.08 + time * 0.095 + viewScroll * 0.38;
       introKnot.rotation.z = -0.35 + Math.sin(time * 0.15) * 0.04;
       worlds[0].flecks.rotation.z = time * 0.014;
       for (const [i, orbiter] of orbiters.entries()) {
@@ -717,14 +740,14 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       photoOrb.position.y = 0.2 + Math.sin(time * 0.45) * 0.09;
     }
     if (worlds[2].group.visible) {
-      achievementCrown.rotation.y = time * 0.13 + (currentScroll - 2) * 0.58;
+      achievementCrown.rotation.y = time * 0.13 + (viewScroll - 2) * 0.58;
       achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
       for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
       worlds[2].rings[0].rotation.z = -0.3 + time * 0.06;
       worlds[2].rings[1].rotation.y = -0.3 + time * 0.035;
     }
     if (worlds[3].group.visible) {
-      wavePhase.value = time * 0.47 + currentScroll * 0.8;
+      wavePhase.value = time * 0.47 + viewScroll * 0.8;
       for (const [i, portal] of portals.entries()) portal.rotation.z = 0.16 - i * 0.06 + Math.sin(time * 0.2 + i * 0.8) * 0.03;
       hobbyCube.rotation.set(time * 0.14 + 0.35, time * 0.2 + 0.65, 0.16);
       hobbyCube.position.y = 0.16 + Math.sin(time * 0.45) * 0.1;
@@ -740,9 +763,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
 
     // Floating links inhabit the first orbit; the active chapter retains a smaller token.
     for (const card of cards) {
-      const initial = 1 - smoothstep(0.05, 0.88, currentScroll);
-      const active = 1 - smoothstep(0.15, 0.63, Math.abs(currentScroll - card.index));
-      const opacity = Math.max(initial, active * 0.96);
+      const initial = 1 - smoothstep(0.05, 0.88, viewScroll);
+      const active = 1 - smoothstep(0.15, 0.63, Math.abs(viewScroll - card.index));
+      const opacity = Math.max(initial, active * 0.96) * smoothstep(0.55, 0.98, startupProgress);
       card.opacity = opacity;
       // On a phone these tiny canvas labels become unreadable. The equivalent
       // chapter links remain available in the normal, accessible navigation.
@@ -805,60 +828,33 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     if (failed || disposed) return;
     failed = true;
     cancelAnimationFrame(raf);
-    clearTimeout(sharpTimer);
-    sharpTimer = 0;
     raf = 0;
     releaseGesture();
     canvas.style.cursor = '';
     onError?.(error instanceof Error ? error : new Error(String(error)));
   }
 
-  function renderOnce(duration = 0) {
-    requestFrame(duration);
+  function renderOnce() {
+    requestFrame();
   }
 
-  function desiredPixelRatio(sharp) {
-    const automatic = motion && !locked;
-    const sharpCap = automatic ? Math.max(0.65, 1.5 * idleResolutionScale) : (resolutionScale < 0.85 ? 1.35 : 1.5);
-    const cap = sharp ? sharpCap : resolutionScale;
-    return Math.min(nativePixelRatio, cap);
-  }
-
-  function setResolution(sharp, force = false) {
-    quality = sharp ? 'sharp' : 'active';
-    const next = desiredPixelRatio(sharp);
+  function setResolution(force = false) {
+    // Retina clarity stays constant while dragging. Only an actual viewport
+    // resize or display-DPR change reallocates the drawing buffer.
+    const budgetDpr = Math.max(1, Math.sqrt(6000000 / (width * height)));
+    const next = Math.min(nativePixelRatio, 2, budgetDpr);
     if (!force && Math.abs(next - pixelRatio) < 0.001) return;
     pixelRatio = next;
     renderer.setPixelRatio(pixelRatio);
     if (force) renderer.setSize(width, height, false);
   }
 
-  function scheduleSharpFrame() {
-    if (!sharpPending || (motion && !locked) || disposed || failed || document.hidden || gesture?.dragging || sharpTimer || raf) return;
-    const wait = Math.max(0, qualityUntil - performance.now());
-    if (wait > 1) {
-      sharpTimer = window.setTimeout(() => {
-        sharpTimer = 0;
-        requestFrame();
-      }, wait + 1);
-    } else {
-      raf = requestAnimationFrame(frame);
-    }
-  }
-
   function frame(timestamp) {
     raf = 0;
     if (disposed || failed || document.hidden) return;
-    const automatic = motion && !locked;
-    const settling = Math.abs(targetScroll - currentScroll) > 0.001 || renderedDrag.distanceToSquared(drag) > 0.000001;
-    const interacting = Boolean(gesture?.dragging || settling || timestamp < animateUntil || timestamp < qualityUntil);
-    const sharpening = automatic ? !interacting : !gesture?.dragging && timestamp >= qualityUntil;
-    if (!needsRender && !automatic && !sharpPending) return;
-    if (!needsRender && !automatic && !sharpening) {
-      scheduleSharpFrame(timestamp);
-      return;
-    }
-    const frameInterval = 1000 / (automatic && !interacting ? idleFrameRate : 30);
+    const automatic = automaticMotion();
+    if (!needsRender && !automatic) return;
+    const frameInterval = 1000 / 60;
     if (lastFrame && timestamp - lastFrame < frameInterval - 0.6) {
       raf = requestAnimationFrame(frame);
       return;
@@ -868,11 +864,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     lastFrame = timestamp;
     const start = performance.now();
     try {
-      setResolution(sharpening);
       applyFrame(delta, automatic);
     } catch (error) { fail(error); return; }
     needsRender = false;
-    sharpPending = !automatic && !sharpening && desiredPixelRatio(true) > pixelRatio + 0.001;
     const duration = performance.now() - start;
     if (diagnostics) {
       stats.renders += 1;
@@ -884,37 +878,24 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       stats.lines = counts.lines;
       stats.points = counts.points;
     }
-    const slowPacing = elapsed > frameInterval * 1.8 && elapsed < 400;
-    const underLoad = automatic && (duration > (interacting ? 16 : 22) || slowPacing);
+    const slowPacing = elapsed > frameInterval * 1.55 && elapsed < 200;
+    const underLoad = automatic && (duration > 12 || slowPacing);
     slowFrames = underLoad ? slowFrames + 1 : Math.max(0, slowFrames - 1);
-    if (slowFrames >= 6) {
-      if (interacting) {
-        resolutionScale = Math.max(0.65, resolutionScale - 0.1);
-        idleResolutionScale = Math.min(idleResolutionScale, resolutionScale);
-      } else {
-        idleResolutionScale = Math.max(0.45, idleResolutionScale - 0.1);
-        resolutionScale = Math.min(resolutionScale, Math.max(0.65, 1.5 * idleResolutionScale));
-        idleFrameRate = 20;
-      }
+    if (slowFrames >= 10 && decorationLevel < 2) {
+      reduceDecorations();
       slowFrames = 0;
     }
     if ((needsRender || automatic) && !raf) raf = requestAnimationFrame(frame);
-    else scheduleSharpFrame(timestamp);
   }
 
-  function requestFrame(duration = 0) {
+  function requestFrame() {
     if (disposed || failed) return;
-    clearTimeout(sharpTimer);
-    sharpTimer = 0;
     needsRender = true;
-    sharpPending = true;
-    if (duration > 0) qualityUntil = Math.max(qualityUntil, performance.now() + duration);
-    if (motion && duration > 0) animateUntil = Math.max(animateUntil, performance.now() + duration);
     if (!document.hidden && !raf) raf = requestAnimationFrame(frame);
   }
 
-  function resume(duration = 220) {
-    requestFrame(duration);
+  function resume() {
+    requestFrame();
   }
 
   function resize() {
@@ -931,7 +912,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     height = nextHeight;
     mobile = nextMobile;
     nativePixelRatio = nextNativePixelRatio;
-    setResolution(false, true);
+    setResolution(true);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
@@ -943,6 +924,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   }
 
   function raycast(event) {
+    if (typeof onCardLayout === 'function') return null;
     if (!width || !height || !ready) return null;
     pointer.set((event.clientX - canvasLeft) / width * 2 - 1, 1 - (event.clientY - canvasTop) / height * 2);
     raycaster.setFromCamera(pointer, camera);
@@ -952,6 +934,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
 
   function hover(event) {
     if (locked || gesture || failed || event.pointerType === 'touch') return;
+    if (typeof onCardLayout === 'function') return;
     const now = performance.now();
     if (now - lastHover < 50) return;
     lastHover = now;
@@ -1029,8 +1012,6 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   function visibilityChange() {
     cancelAnimationFrame(raf);
     raf = 0;
-    clearTimeout(sharpTimer);
-    sharpTimer = 0;
     lastFrame = 0;
     releaseGesture();
     if (!document.hidden) renderOnce();
@@ -1081,11 +1062,13 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
           lastLines: stats.lines,
           lastPoints: stats.points,
           pixelRatio,
-          idle: !raf && !sharpTimer,
+          idle: !raf,
           quality,
-          automaticMotion: motion && !locked && !document.hidden,
-          idleFrameRate,
-          idleResolutionScale,
+          automaticMotion: automaticMotion() && !document.hidden,
+          targetFrameRate: 60,
+          decorationLevel,
+          startupProgress,
+          startupMotion,
           motion
         }));
         statsWindow = { renders: stats.renders, milliseconds: stats.milliseconds };
@@ -1133,6 +1116,23 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       canvas.style.cursor = locked ? '' : 'grab';
       renderOnce();
     },
+    setStartupProgress(value) {
+      if (disposed || failed) return;
+      const next = THREE.MathUtils.clamp(Number.isFinite(value) ? value : 1, 0, 1);
+      if (Math.abs(next - startupProgress) < 0.00005) return;
+      startupProgress = next;
+      requestFrame();
+    },
+    setStartupMotion(enabled) {
+      if (disposed || failed) return;
+      const next = Boolean(enabled);
+      if (next === startupMotion) return;
+      startupMotion = next;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      lastFrame = 0;
+      requestFrame();
+    },
     resetView() {
       if (disposed || failed) return;
       drag.set(0, 0);
@@ -1144,8 +1144,6 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       if (disposed) return;
       disposed = true;
       cancelAnimationFrame(raf);
-      clearTimeout(sharpTimer);
-      sharpTimer = 0;
       if (statsTimer) window.clearInterval(statsTimer);
       releaseGesture();
       observer?.disconnect();
