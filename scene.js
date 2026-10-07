@@ -1,125 +1,110 @@
 import * as THREE from './vendor/three.module.js';
 
-/** A persistent, content-independent 3D gallery. All public text stays in the DOM. */
+/** Four scroll-connected worlds. Portfolio copy and accessible navigation remain in the DOM. */
 export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}) {
   const noop = () => {};
-  const empty = { setChapter: noop, setMotion: noop, setLocked: noop, resetView: noop, dispose: noop };
+  const empty = { setScroll: noop, setChapter: noop, setMotion: noop, setLocked: noop, resetView: noop, dispose: noop };
   let renderer;
   try {
-    if (!(canvas instanceof HTMLCanvasElement)) throw new Error('A canvas is required for the 3D gallery.');
+    if (!(canvas instanceof HTMLCanvasElement)) throw new Error('A canvas is required for the 3D view.');
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
   } catch (error) {
     onError?.(error);
     return empty;
   }
 
-  renderer.setClearColor(0x071222, 0);
+  renderer.setClearColor(0x040c1c, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.22;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x071222, 0.021);
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 55);
+  scene.fog = new THREE.FogExp2(0x040c1c, 0.019);
+  const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100);
   const gallery = new THREE.Group();
-  const sculpture = new THREE.Group();
   const stars = new THREE.Group();
   scene.add(gallery, stars);
-  gallery.add(sculpture);
-
-  const palettes = ['#8ccaff', '#7ddcff', '#8aafff', '#a4adff'].map(value => new THREE.Color(value));
-  const accent = palettes[0].clone();
-  const targetAccent = palettes[0].clone();
-  const white = new THREE.Color(0xffffff);
-  const targetRotation = new THREE.Vector2();
-  const dragRotation = new THREE.Vector2();
-  const renderedRotation = new THREE.Vector2();
+  const worlds = [];
+  const palette = [0x8bc6ff, 0xa1d6ff, 0x58e2ff, 0xb8b0ff].map(hex => new THREE.Color(hex));
+  const backgrounds = [0x040c1c, 0x050e20, 0x02141e, 0x080c24].map(hex => new THREE.Color(hex));
+  const accent = palette[0].clone();
+  const backdrop = backgrounds[0].clone();
+  const lookTarget = new THREE.Vector3();
   const pointer = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
+  const drag = new THREE.Vector2();
+  const renderedDrag = new THREE.Vector2();
   const cards = [];
   const pickMeshes = [];
-  const orbiters = [];
-  const trails = [];
-  const disposableTextures = new Set();
+  const textures = new Set();
+  const originalTouchAction = canvas.style.touchAction;
+  canvas.style.touchAction = 'pan-y';
   let environmentTarget;
+  let observer;
   let raf = 0;
   let lastFrame = 0;
   let time = 0;
+  let targetScroll = 0;
+  let currentScroll = 0;
   let motion = true;
   let locked = false;
   let disposed = false;
   let failed = false;
   let ready = false;
-  let chapter = 0;
   let hovered = null;
   let gesture = null;
+  let mobile = window.innerWidth < 760;
   let width = 1;
   let height = 1;
-  let mobile = false;
-  let baseDistance = 8.7;
-  let targetDistance = baseDistance;
-  let cameraDistance = targetDistance;
-  let targetAnchor = 0;
-  let currentAnchor = 0;
-  const originalTouchAction = canvas.style.touchAction;
-  canvas.style.touchAction = 'pan-y';
+  let pixelRatio = 0;
+  let baseDistance = 8;
+  let anchor = 0;
+  const spacing = 9;
+  const smoothstep = (start, end, value) => THREE.MathUtils.smoothstep(value, start, end);
+  const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 3);
 
-  scene.add(new THREE.HemisphereLight(0xc6dcff, 0x0b1528, 2.2));
-  const key = new THREE.DirectionalLight(0xf5f8ff, 4.2);
-  key.position.set(-3, 5, 5);
+  scene.add(new THREE.HemisphereLight(0xd6e8ff, 0x061127, 2.2));
+  const key = new THREE.DirectionalLight(0xf0f7ff, 4.1);
+  key.position.set(-4, 6, 7);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x78baff, 4.5);
-  rim.position.set(4, 2, -3);
+  const rim = new THREE.DirectionalLight(0x7babff, 5.6);
+  rim.position.set(6, 2, -4);
   scene.add(rim);
-  const blueLight = new THREE.PointLight(0x60a9ff, 15, 13, 2);
-  blueLight.position.set(-1.1, -0.4, 2.5);
-  gallery.add(blueLight);
+  const fill = new THREE.PointLight(0x63b5ff, 24, 18, 2);
+  gallery.add(fill);
 
-  function canvasTexture(draw, textureWidth = 1024, textureHeight = 600) {
+  function canvasTexture(draw, w = 512, h = 512) {
     const source = document.createElement('canvas');
-    source.width = textureWidth;
-    source.height = textureHeight;
+    source.width = w;
+    source.height = h;
     const context = source.getContext('2d');
-    if (!context) throw new Error('This browser could not draw the 3D gallery artwork.');
-    draw(context, textureWidth, textureHeight);
+    if (!context) throw new Error('The browser could not draw the 3D artwork.');
+    draw(context, w, h);
     const texture = new THREE.CanvasTexture(source);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    disposableTextures.add(texture);
+    textures.add(texture);
     return texture;
-  }
-
-  function roundedRect(context, x, y, w, h, r) {
-    context.beginPath();
-    context.moveTo(x + r, y);
-    context.lineTo(x + w - r, y);
-    context.quadraticCurveTo(x + w, y, x + w, y + r);
-    context.lineTo(x + w, y + h - r);
-    context.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    context.lineTo(x + r, y + h);
-    context.quadraticCurveTo(x, y + h, x, y + h - r);
-    context.lineTo(x, y + r);
-    context.quadraticCurveTo(x, y, x + r, y);
-    context.closePath();
   }
 
   function makeEnvironment() {
     const texture = canvasTexture((context, w, h) => {
-      const sky = context.createLinearGradient(0, 0, 0, h);
-      sky.addColorStop(0, '#07172f');
-      sky.addColorStop(0.39, '#142b48');
-      sky.addColorStop(0.50, '#c7def3');
-      sky.addColorStop(0.60, '#162b4e');
-      sky.addColorStop(1, '#030810');
-      context.fillStyle = sky;
+      const gradient = context.createLinearGradient(0, 0, 0, h);
+      gradient.addColorStop(0, '#031126');
+      gradient.addColorStop(0.31, '#254369');
+      gradient.addColorStop(0.43, '#eff6ff');
+      gradient.addColorStop(0.50, '#6883ab');
+      gradient.addColorStop(0.66, '#0b1c37');
+      gradient.addColorStop(1, '#010309');
+      context.fillStyle = gradient;
       context.fillRect(0, 0, w, h);
-      for (const [x, color] of [[w * 0.16, '#f1f7ff'], [w * 0.64, '#b8d6ff'], [w * 0.82, '#6a96da']]) {
-        const wash = context.createLinearGradient(x - 50, 0, x + 50, 0);
-        wash.addColorStop(0, 'rgba(100,160,255,0)');
-        wash.addColorStop(0.5, color);
-        wash.addColorStop(1, 'rgba(100,160,255,0)');
-        context.fillStyle = wash;
-        context.fillRect(x - 50, h * 0.08, 100, h * 0.70);
+      for (const [x, color, stripWidth] of [[w * 0.18, '#f8fcff', 65], [w * 0.56, '#b2dcff', 115], [w * 0.79, '#6692e9', 50]]) {
+        const strip = context.createLinearGradient(x - stripWidth, 0, x + stripWidth, 0);
+        strip.addColorStop(0, 'rgba(170,210,255,0)');
+        strip.addColorStop(0.5, color);
+        strip.addColorStop(1, 'rgba(170,210,255,0)');
+        context.fillStyle = strip;
+        context.fillRect(x - stripWidth, h * 0.10, stripWidth * 2, h * 0.66);
       }
     }, 1024, 512);
     texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -129,35 +114,99 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     generator.dispose();
   }
 
-  function ribbonPoint(t) {
-    const radius = 0.86 + 0.24 * Math.cos(3 * t);
-    return new THREE.Vector3(radius * Math.cos(2 * t), radius * Math.sin(2 * t), 0.32 * Math.sin(3 * t));
+  const chrome = () => new THREE.MeshPhysicalMaterial({ color: 0xcbdff2, metalness: 1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.10, iridescence: 0.65, iridescenceIOR: 1.34, iridescenceThicknessRange: [150, 460], transparent: true });
+  const ice = () => new THREE.MeshPhysicalMaterial({ color: 0x9cc6ff, metalness: 0.74, roughness: 0.13, clearcoat: 1, emissive: 0x092548, emissiveIntensity: 0.5, transparent: true });
+  const lightMaterial = (color, opacity = 0.6) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+
+  function makeWorld(index) {
+    const group = new THREE.Group();
+    group.position.z = -index * spacing;
+    gallery.add(group);
+    const world = { group, materials: [], weight: index ? 0 : 1 };
+    worlds.push(world);
+    return world;
   }
 
-  function makeRibbon() {
-    const segments = 260;
-    const crossSection = [[-0.205, -0.012], [-0.188, -0.03], [0.188, -0.03], [0.205, -0.012], [0.205, 0.012], [0.188, 0.03], [-0.188, 0.03], [-0.205, 0.012]];
+  function collectMaterials(world) {
+    const collected = new Set();
+    world.group.traverse(object => {
+      if (!object.material) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (collected.has(material)) continue;
+        collected.add(material);
+        material.transparent = true;
+        material.userData.baseOpacity = material.opacity;
+        material.userData.solid = Boolean(material.isMeshPhysicalMaterial || material.isMeshStandardMaterial);
+        // Crossfades must not leave an invisible surface masking the next world.
+        material.depthWrite = false;
+        world.materials.push(material);
+      }
+    });
+  }
+
+  function torus(parent, radius, thickness, material, rotation = [0, 0, 0], segments = 120) {
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, thickness, 6, segments), material);
+    mesh.rotation.set(...rotation);
+    parent.add(mesh);
+    return mesh;
+  }
+
+  function pathTube(parent, points, thickness, material, closed = false) {
+    const curve = new THREE.CatmullRomCurve3(points, closed);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, mobile ? 80 : 128, thickness, 5, closed), material);
+    parent.add(mesh);
+    return mesh;
+  }
+
+  let glowMap;
+  function makeGlowMap() {
+    return canvasTexture((context, w, h) => {
+      const gradient = context.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.11, 'rgba(204,229,255,0.65)');
+      gradient.addColorStop(0.35, 'rgba(114,155,255,0.13)');
+      gradient.addColorStop(1, 'rgba(114,155,255,0)');
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, w, h);
+    }, 128, 128);
+  }
+
+  function halo(parent, color, size, opacity, position) {
+    const material = new THREE.SpriteMaterial({ map: glowMap, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(size, size, 1);
+    if (position) sprite.position.copy(position);
+    parent.add(sprite);
+    return sprite;
+  }
+
+  function ribbonPoint(t) {
+    const radius = 1.04 + 0.25 * Math.cos(t * 3);
+    return new THREE.Vector3(radius * Math.cos(t * 2), radius * Math.sin(t * 2), 0.39 * Math.sin(t * 3));
+  }
+
+  function makeRibbon(parent) {
+    const segments = mobile ? 160 : 230;
+    const crossSection = [[-0.24, -0.022], [-0.225, -0.043], [0.225, -0.043], [0.24, -0.022], [0.24, 0.022], [0.225, 0.043], [-0.225, 0.043], [-0.24, 0.022]];
     const positions = [];
     const indices = [];
-    const trimPaths = [[], []];
+    const trim = [];
     for (let i = 0; i <= segments; i++) {
       const t = i / segments * Math.PI * 2;
       const center = ribbonPoint(t);
       const tangent = ribbonPoint(t + 0.001).sub(ribbonPoint(t - 0.001)).normalize();
-      const normal = center.clone().add(new THREE.Vector3(0, 0, 0.35));
+      const normal = center.clone().add(new THREE.Vector3(0, 0, 0.48));
       normal.addScaledVector(tangent, -normal.dot(tangent)).normalize();
       const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
-      const twist = 0.65 * Math.sin(t * 3);
-      const twistedNormal = normal.clone().multiplyScalar(Math.cos(twist)).addScaledVector(binormal, Math.sin(twist));
-      const twistedBinormal = new THREE.Vector3().crossVectors(tangent, twistedNormal).normalize();
+      const twist = Math.sin(t * 3) * 0.64;
+      const across = normal.clone().multiplyScalar(Math.cos(twist)).addScaledVector(binormal, Math.sin(twist));
+      const up = new THREE.Vector3().crossVectors(tangent, across).normalize();
       for (const [x, y] of crossSection) {
-        const point = center.clone().addScaledVector(twistedNormal, x).addScaledVector(twistedBinormal, y);
+        const point = center.clone().addScaledVector(across, x).addScaledVector(up, y);
         positions.push(point.x, point.y, point.z);
       }
-      trimPaths[0].push(center.clone().addScaledVector(twistedNormal, 0.207));
-      trimPaths[1].push(center.clone().addScaledVector(twistedNormal, -0.207));
-      if (i === segments) continue;
-      for (let j = 0; j < crossSection.length; j++) {
+      trim.push(center.clone().addScaledVector(across, 0.241));
+      if (i < segments) for (let j = 0; j < 8; j++) {
         const a = i * 8 + j;
         const b = i * 8 + (j + 1) % 8;
         indices.push(a, b, a + 8, b, b + 8, a + 8);
@@ -167,217 +216,413 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    const material = new THREE.MeshPhysicalMaterial({ color: 0xc6daef, metalness: 1, roughness: 0.19, clearcoat: 1, clearcoatRoughness: 0.09, iridescence: 0.85, iridescenceIOR: 1.35, iridescenceThicknessRange: [180, 520], side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.set(0.48, 0.06, -0.30);
-    sculpture.add(mesh);
-    for (const path of trimPaths) {
-      const edge = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path), 220, 0.007, 5, false), new THREE.MeshBasicMaterial({ color: 0xb5dfff, transparent: true, opacity: 0.45 }));
-      edge.rotation.copy(mesh.rotation);
-      sculpture.add(edge);
-    }
-    return mesh;
+    const group = new THREE.Group();
+    group.rotation.set(0.50, 0.08, -0.35);
+    group.add(new THREE.Mesh(geometry, chrome()));
+    pathTube(group, trim, 0.007, lightMaterial(0xb3e5ff, 0.50));
+    parent.add(group);
+    return group;
   }
 
-  let coreMaterial;
-  let haloMaterial;
-  let ribbon;
-  function makeSculpture() {
-    ribbon = makeRibbon();
-    coreMaterial = new THREE.MeshPhysicalMaterial({ color: 0x3a78bc, metalness: 0.95, roughness: 0.12, clearcoat: 1, emissive: 0x0e254c, emissiveIntensity: 0.55 });
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 3), coreMaterial);
-    sculpture.add(core);
-    const wire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.366, 1), new THREE.MeshBasicMaterial({ color: 0xb1dcff, wireframe: true, transparent: true, opacity: 0.20 }));
-    sculpture.add(wire);
-    const glow = canvasTexture((context, w, h) => {
-      const gradient = context.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-      gradient.addColorStop(0, 'rgba(111,180,255,0.48)');
-      gradient.addColorStop(0.20, 'rgba(66,129,236,0.20)');
-      gradient.addColorStop(0.53, 'rgba(44,91,178,0.07)');
-      gradient.addColorStop(1, 'rgba(8,23,52,0)');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, w, h);
-    }, 256, 256);
-    haloMaterial = new THREE.SpriteMaterial({ map: glow, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.60 });
-    const halo = new THREE.Sprite(haloMaterial);
-    halo.scale.set(4.7, 4.7, 1);
-    halo.position.z = -1;
-    sculpture.add(halo);
+  let introKnot;
+  const orbiters = [];
+  function makeIntro() {
+    const world = makeWorld(0);
+    introKnot = makeRibbon(world.group);
+    const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(0.37, 2), ice());
+    world.group.add(heart);
+    halo(world.group, 0x4a8fff, 6.6, 0.36, new THREE.Vector3(0, 0, -1.5));
     for (let i = 0; i < 3; i++) {
-      const radius = 1.47 + i * 0.30;
       const orbit = new THREE.Group();
-      orbit.rotation.set(0.52 + i * 0.36, 0.35 + i * 0.47, -0.3 + i * 0.50);
-      const material = new THREE.MeshBasicMaterial({ color: i === 1 ? 0x527eaa : 0x8dcaff, transparent: true, opacity: i === 1 ? 0.19 : 0.29, depthWrite: false });
-      orbit.add(new THREE.Mesh(new THREE.TorusGeometry(radius, 0.005, 5, 160), material));
-      const satellite = new THREE.Mesh(new THREE.SphereGeometry(i === 0 ? 0.049 : 0.029, 12, 8), new THREE.MeshStandardMaterial({ color: 0xc0e6ff, metalness: 0.6, roughness: 0.12, emissive: 0x699bd4, emissiveIntensity: 1.1 }));
-      orbit.add(satellite);
-      orbiters.push({ group: orbit, satellite, radius, offset: i * 2.2, speed: 0.20 + i * 0.04 });
-      gallery.add(orbit);
+      orbit.rotation.set(0.6 + i * 0.54, 0.31 + i * 0.44, -0.36 + i * 0.6);
+      const radius = 1.68 + i * 0.32;
+      torus(orbit, radius, 0.009, lightMaterial(i === 1 ? 0x6d9ecc : 0x9dcfff, i === 1 ? 0.21 : 0.48));
+      const moon = new THREE.Mesh(new THREE.SphereGeometry(i ? 0.060 : 0.12, 16, 10), chrome());
+      orbit.add(moon);
+      world.group.add(orbit);
+      orbiters.push({ orbit, moon, radius, phase: i * 2.1 });
     }
+    const flecks = new THREE.Group();
+    const fleckGeometry = new THREE.OctahedronGeometry(0.055, 0);
+    for (let i = 0; i < 9; i++) {
+      const angle = i * 2.399;
+      const mesh = new THREE.Mesh(fleckGeometry, ice());
+      mesh.position.set(Math.cos(angle) * (2.4 + i * 0.045), Math.sin(angle) * 1.9, -0.6 - i * 0.13);
+      mesh.rotation.set(angle, angle * 0.8, 0);
+      flecks.add(mesh);
+    }
+    world.group.add(flecks);
+    world.flecks = flecks;
   }
 
-  function makeStars() {
-    let seed = 90371;
-    const random = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  const crystals = [];
+  let achievementCrown;
+  function makeAchievements() {
+    const world = makeWorld(1);
+    achievementCrown = new THREE.Group();
+    world.group.add(achievementCrown);
+    const center = new THREE.Mesh(new THREE.OctahedronGeometry(1.02, 0), chrome());
+    center.scale.set(0.72, 1.7, 0.72);
+    center.rotation.y = Math.PI / 4;
+    achievementCrown.add(center);
+    const shell = new THREE.Mesh(new THREE.OctahedronGeometry(1.09, 0), new THREE.MeshBasicMaterial({ color: 0xc4e8ff, wireframe: true, transparent: true, opacity: 0.30, depthWrite: false }));
+    shell.scale.copy(center.scale);
+    shell.rotation.copy(center.rotation);
+    achievementCrown.add(shell);
+    halo(world.group, 0x6ca5ff, 7.8, 0.28, new THREE.Vector3(0, 0.1, -2.2));
+    for (let i = 0; i < 12; i++) {
+      const angle = i / 12 * Math.PI * 2;
+      const radius = 1.60 + Math.sin(i * 3.1) * 0.15;
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), i % 3 ? ice() : chrome());
+      shard.scale.set(0.63, 1.40 + (i % 3) * 0.3, 0.63);
+      shard.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius * 1.04, Math.sin(angle * 2) * 0.45);
+      shard.rotation.set(0.25, angle, -angle + Math.PI / 2);
+      achievementCrown.add(shard);
+      crystals.push({ shard, angle, radius });
+    }
+    const ring1 = torus(world.group, 2.12, 0.016, lightMaterial(0x9bddff, 0.7), [0.9, 0.25, -0.3]);
+    const ring2 = torus(world.group, 2.64, 0.006, lightMaterial(0x699bdf, 0.42), [0.54, -0.3, 0.38]);
+    world.rings = [ring1, ring2];
+    const points = [];
+    const nodes = [];
+    for (let i = 0; i < 14; i++) {
+      const angle = i / 14 * Math.PI * 2;
+      nodes.push(new THREE.Vector3(Math.cos(angle) * (2.45 + i % 2 * 0.32), Math.sin(angle) * 2.0, -1.1 - Math.sin(angle * 3) * 0.42));
+    }
+    for (let i = 0; i < nodes.length; i++) {
+      points.push(nodes[i], nodes[(i + 1) % nodes.length]);
+      if (i % 2 === 0) points.push(nodes[i], nodes[(i + 4) % nodes.length]);
+      const moon = new THREE.Mesh(new THREE.SphereGeometry(i % 3 === 0 ? 0.046 : 0.024, 8, 6), lightMaterial(0xc0e9ff, 0.9));
+      moon.position.copy(nodes[i]);
+      world.group.add(moon);
+    }
+    world.group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x7cbdff, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending })));
+  }
+
+  let waveGeometry;
+  let waveBase;
+  let wavePointGeometry;
+  let wavePointBase;
+  const portals = [];
+  let hobbyCube;
+  function makeHobbies() {
+    const world = makeWorld(2);
+    const columns = mobile ? 30 : 44;
+    const rows = mobile ? 19 : 28;
+    const positions = [];
+    const vertices = [];
+    function point(column, row) {
+      const x = (column / columns - 0.5) * 10;
+      const z = (row / rows - 0.5) * 8 - 1.2;
+      return [x, -1.9, z];
+    }
+    for (let row = 0; row <= rows; row++) for (let col = 0; col <= columns; col++) {
+      const p = point(col, row);
+      vertices.push(...p);
+      if (col < columns) positions.push(...p, ...point(col + 1, row));
+      if (row < rows) positions.push(...p, ...point(col, row + 1));
+    }
+    waveGeometry = new THREE.BufferGeometry();
+    waveBase = new Float32Array(positions);
+    waveGeometry.setAttribute('position', new THREE.BufferAttribute(waveBase.slice(), 3));
+    const grid = new THREE.LineSegments(waveGeometry, new THREE.LineBasicMaterial({ color: 0x31c5ed, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending }));
+    world.group.add(grid);
+    wavePointGeometry = new THREE.BufferGeometry();
+    wavePointBase = new Float32Array(vertices);
+    wavePointGeometry.setAttribute('position', new THREE.BufferAttribute(wavePointBase.slice(), 3));
+    world.group.add(new THREE.Points(wavePointGeometry, new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false })));
+    halo(world.group, 0x00d5ff, 8.5, 0.27, new THREE.Vector3(0.3, 0.0, -3.5));
+    for (let i = 0; i < 4; i++) {
+      const portal = new THREE.Group();
+      portal.position.set(i * 0.25, 0.10 + i * 0.10, -i * 1.65);
+      portal.rotation.set(0.08, -0.10, 0.16 - i * 0.06);
+      const material = lightMaterial(i ? 0x287ea8 : 0x81edff, i ? 0.42 : 0.8);
+      torus(portal, 1.63 + i * 0.17, i ? 0.013 : 0.024, material);
+      torus(portal, 1.77 + i * 0.17, 0.004, lightMaterial(0x47d3f4, 0.30));
+      for (let j = 0; j < 12; j++) {
+        const a = j / 12 * Math.PI * 2;
+        const tick = new THREE.Mesh(new THREE.BoxGeometry(0.027, j % 3 ? 0.07 : 0.15, 0.025), lightMaterial(0xafefff, i ? 0.5 : 0.8));
+        tick.position.set(Math.sin(a) * (1.73 + i * 0.17), Math.cos(a) * (1.73 + i * 0.17), 0);
+        tick.rotation.z = -a;
+        portal.add(tick);
+      }
+      world.group.add(portal);
+      portals.push(portal);
+    }
+    hobbyCube = new THREE.Group();
+    hobbyCube.position.set(0.10, 0.16, 0.18);
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.93, 0.93, 0.93), chrome());
+    hobbyCube.add(cube);
+    hobbyCube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cube.geometry), new THREE.LineBasicMaterial({ color: 0x9cf6ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })));
+    world.group.add(hobbyCube);
+    const paths = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const points = [];
+      for (let j = 0; j <= 45; j++) {
+        const t = j / 45 * Math.PI * 2;
+        points.push(new THREE.Vector3(Math.cos(t) * (2.4 + i * 0.3), Math.sin(t * 2 + i) * 0.28 - 1.2 + i * 0.32, Math.sin(t) * 1.5));
+      }
+      pathTube(paths, points, 0.010, lightMaterial(0x6fdef4, 0.50), true);
+    }
+    world.group.add(paths);
+    world.paths = paths;
+  }
+
+  const tunnelRings = [];
+  let factCore;
+  let nebula;
+  function makeFacts() {
+    const world = makeWorld(3);
+    nebula = new THREE.Group();
+    world.group.add(nebula);
+    halo(nebula, 0x535cc7, 9.4, 0.20, new THREE.Vector3(-0.6, 0.6, -7));
+    halo(nebula, 0x9470dc, 6.3, 0.22, new THREE.Vector3(1.7, -0.7, -5));
+    halo(nebula, 0x739ef1, 3.5, 0.17, new THREE.Vector3(0.2, 0.3, -2));
+    for (let i = 0; i < 11; i++) {
+      const ring = new THREE.Group();
+      const z = 3.0 - i * 1.6;
+      const x = Math.sin(i * 0.47) * 0.38;
+      const y = Math.cos(i * 0.43) * 0.23;
+      ring.position.set(x, y, z);
+      const points = [];
+      for (let j = 0; j < 64; j++) {
+        const t = j / 64 * Math.PI * 2;
+        const radius = 2.37 + Math.sin(t * 5 + i * 0.38) * 0.075;
+        points.push(new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius * 0.87, Math.sin(t * 3 + i * 0.42) * 0.05));
+      }
+      pathTube(ring, points, i < 2 ? 0.013 : 0.009, lightMaterial(i % 3 ? 0x848adb : 0xb8a7ef, Math.max(0.18, 0.62 - i * 0.035)), true);
+      ring.rotation.z = i * 0.16;
+      world.group.add(ring);
+      tunnelRings.push(ring);
+    }
+    for (let i = 0; i < 8; i++) {
+      const points = [];
+      const a = i / 8 * Math.PI * 2;
+      for (let j = 0; j < 11; j++) {
+        const twist = a + j * 0.16;
+        points.push(new THREE.Vector3(Math.cos(twist) * 2.37 + Math.sin(j * 0.47) * 0.38, Math.sin(twist) * 2.06 + Math.cos(j * 0.43) * 0.23, 3 - j * 1.6));
+      }
+      pathTube(world.group, points, 0.004, lightMaterial(0x7e7fb8, 0.17));
+    }
+    factCore = new THREE.Group();
+    factCore.position.set(0.04, 0.1, -0.8);
+    const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.60, 0), chrome());
+    gem.scale.set(0.87, 1.35, 0.87);
+    factCore.add(gem);
+    const outer = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85, 1), new THREE.MeshBasicMaterial({ color: 0xc5bfff, transparent: true, opacity: 0.18, wireframe: true, depthWrite: false }));
+    outer.scale.set(0.93, 1.15, 0.93);
+    factCore.add(outer);
+    world.group.add(factCore);
     const positions = [];
     const colors = [];
-    for (let i = 0; i < 390; i++) {
-      positions.push((random() - 0.5) * 21, (random() - 0.5) * 12, -1.6 - random() * 11);
-      const brightness = 0.30 + random() * 0.60;
-      colors.push(brightness * 0.63, brightness * 0.82, brightness);
+    let seed = 4351;
+    const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
+    for (let i = 0; i < (mobile ? 280 : 450); i++) {
+      const a = random() * Math.PI * 2;
+      const radius = 0.4 + Math.pow(random(), 0.5) * 2.0;
+      positions.push(Math.cos(a) * radius, Math.sin(a) * radius * 0.85, -1 - random() * 14);
+      const brightness = 0.35 + random() * 0.65;
+      colors.push(brightness * 0.76, brightness * 0.79, brightness);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    stars.add(new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.021, vertexColors: true, transparent: true, opacity: 0.83, depthWrite: false, sizeAttenuation: true })));
+    world.group.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.050, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, blending: THREE.AdditiveBlending })));
   }
 
-  function drawBadge(context, kind) {
-    context.save();
-    context.translate(844, 335);
-    context.strokeStyle = '#a5d9ff';
-    context.fillStyle = 'rgba(141,200,255,0.06)';
-    context.lineWidth = 3.3;
-    context.lineJoin = 'round';
-    if (kind === 1) {
-      context.beginPath();
-      for (let i = 0; i < 12; i++) {
-        const angle = -Math.PI / 2 + i / 12 * Math.PI * 2;
-        const radius = i % 2 ? 53 : 68;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        i ? context.lineTo(x, y) : context.moveTo(x, y);
-      }
-      context.closePath(); context.fill(); context.stroke();
-      context.beginPath(); context.arc(0, 0, 31, 0, Math.PI * 2); context.stroke();
-      context.beginPath(); context.moveTo(-34, 54); context.lineTo(-41, 103); context.lineTo(-12, 84); context.moveTo(34, 54); context.lineTo(41, 103); context.lineTo(12, 84); context.stroke();
-    } else if (kind === 2) {
-      context.beginPath(); context.moveTo(0, -62); context.lineTo(62, -27); context.lineTo(62, 43); context.lineTo(0, 78); context.lineTo(-62, 43); context.lineTo(-62, -27); context.closePath(); context.fill(); context.stroke();
-      context.beginPath(); context.moveTo(0, 8); context.lineTo(0, 78); context.moveTo(-62, -27); context.lineTo(0, 8); context.lineTo(62, -27); context.moveTo(-31, -45); context.lineTo(31, -10); context.lineTo(31, 60); context.moveTo(31, -45); context.lineTo(-31, -10); context.lineTo(-31, 60); context.moveTo(-62, 7); context.lineTo(0, 42); context.lineTo(62, 7); context.stroke();
-    } else {
-      context.font = '300 106px Arial, sans-serif';
-      context.fillStyle = '#a5d9ff';
-      context.fillText(':D', -60, 43);
-      context.beginPath(); context.moveTo(-81, -51); context.lineTo(-81, -76); context.lineTo(-56, -76); context.moveTo(55, 76); context.lineTo(81, 76); context.lineTo(81, 51); context.stroke();
+  function makeStars() {
+    let seed = 90371;
+    const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
+    const positions = [];
+    const colors = [];
+    const count = mobile ? 490 : 840;
+    for (let i = 0; i < count; i++) {
+      positions.push((random() - 0.5) * 32, (random() - 0.5) * 24, 4 - random() * 77);
+      const brightness = 0.22 + random() * 0.7;
+      colors.push(brightness * 0.67, brightness * 0.80, brightness);
     }
-    context.restore();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    stars.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, size: 0.055, vertexColors: true, transparent: true, opacity: 0.87, depthWrite: false, blending: THREE.AdditiveBlending })));
+    // Sparse longer streaks make the camera travel legible without flashing lights.
+    const streaks = [];
+    for (let i = 0; i < 42; i++) {
+      const x = (random() - 0.5) * 26;
+      const y = (random() - 0.5) * 20;
+      const z = -random() * 65;
+      streaks.push(x, y, z, x + 0.025, y + 0.08, z - 0.5 - random() * 0.6);
+    }
+    const lines = new THREE.BufferGeometry();
+    lines.setAttribute('position', new THREE.Float32BufferAttribute(streaks, 3));
+    stars.add(new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x6c8ebc, transparent: true, opacity: 0.17, blending: THREE.AdditiveBlending, depthWrite: false })));
   }
 
-  function cardTexture(index, title, caption) {
-    return canvasTexture((context, w, h) => {
-      roundedRect(context, 6, 6, w - 12, h - 12, 43);
-      context.save(); context.clip();
+  function roundedRect(context, x, y, w, h, radius) {
+    context.beginPath();
+    context.moveTo(x + radius, y);
+    context.lineTo(x + w - radius, y);
+    context.quadraticCurveTo(x + w, y, x + w, y + radius);
+    context.lineTo(x + w, y + h - radius);
+    context.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    context.lineTo(x + radius, y + h);
+    context.quadraticCurveTo(x, y + h, x, y + h - radius);
+    context.lineTo(x, y + radius);
+    context.quadraticCurveTo(x, y, x + radius, y);
+    context.closePath();
+  }
+
+  function makeCard(index, title, label) {
+    const texture = canvasTexture((context, w, h) => {
+      roundedRect(context, 5, 5, w - 10, h - 10, 22);
       const gradient = context.createLinearGradient(0, 0, w, h);
-      gradient.addColorStop(0, 'rgba(22,48,76,0.94)');
-      gradient.addColorStop(0.55, 'rgba(10,25,45,0.95)');
-      gradient.addColorStop(1, 'rgba(22,42,72,0.95)');
-      context.fillStyle = gradient; context.fillRect(0, 0, w, h);
-      const wash = context.createRadialGradient(w, 0, 0, w, 0, w * 0.8);
-      wash.addColorStop(0, 'rgba(99,173,255,0.18)'); wash.addColorStop(1, 'rgba(99,173,255,0)');
-      context.fillStyle = wash; context.fillRect(0, 0, w, h);
-      context.strokeStyle = 'rgba(138,194,242,0.08)'; context.lineWidth = 1;
-      for (let x = 0; x < w; x += 51) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, h); context.stroke(); }
-      for (let y = 0; y < h; y += 51) { context.beginPath(); context.moveTo(0, y); context.lineTo(w, y); context.stroke(); }
-      context.restore();
-      roundedRect(context, 8, 8, w - 16, h - 16, 41); context.strokeStyle = 'rgba(165,215,255,0.5)'; context.lineWidth = 2; context.stroke();
-      context.fillStyle = '#82b8e2'; context.font = '500 23px Arial, sans-serif'; context.fillText(`0${index + 1}  /  ${['', 'ACHIEVEMENTS', 'HOBBIES', 'RANDOM FACTS'][index]}`, 59, 86);
-      context.strokeStyle = 'rgba(154,199,236,0.21)'; context.lineWidth = 1.5; context.beginPath(); context.moveTo(59, 120); context.lineTo(w - 59, 120); context.stroke();
-      context.fillStyle = '#eef7ff'; context.font = '400 81px Georgia, serif'; context.fillText(title, 59, 271);
-      context.fillStyle = '#93aec9'; context.font = '400 24px Arial, sans-serif'; context.fillText(caption, 62, 331);
-      context.fillStyle = '#b1d6f3'; context.font = '500 21px Arial, sans-serif'; context.fillText('OPEN CHAPTER', 62, 523);
-      context.beginPath(); context.moveTo(257, 516); context.lineTo(283, 490); context.moveTo(265, 490); context.lineTo(283, 490); context.lineTo(283, 508); context.strokeStyle = '#b1d6f3'; context.lineWidth = 2; context.stroke();
-      drawBadge(context, index);
-      context.fillStyle = '#659ac8'; context.beginPath(); context.arc(w - 62, 523, 5, 0, Math.PI * 2); context.fill();
-    });
-  }
-
-  function makeCard(index, title, caption, position, rotation) {
+      gradient.addColorStop(0, '#183658');
+      gradient.addColorStop(0.7, '#09172c');
+      gradient.addColorStop(1, '#17264a');
+      context.fillStyle = gradient;
+      context.fill();
+      context.strokeStyle = 'rgba(158,213,255,0.6)';
+      context.lineWidth = 1.5;
+      context.stroke();
+      context.fillStyle = '#7cb8e8';
+      context.font = '500 16px Arial, sans-serif';
+      context.fillText(`0${index + 1} / ${label}`, 28, 46);
+      context.fillStyle = '#e7f4ff';
+      context.font = '400 42px Georgia, serif';
+      context.fillText(title, 27, 113);
+      context.fillStyle = '#98bcde';
+      context.font = '400 15px Arial, sans-serif';
+      context.fillText('EXPLORE CHAPTER', 29, 169);
+      context.strokeStyle = '#bddfff';
+      context.lineWidth = 1.6;
+      context.beginPath();
+      context.moveTo(w - 48, 172);
+      context.lineTo(w - 29, 152);
+      context.moveTo(w - 43, 152);
+      context.lineTo(w - 29, 152);
+      context.lineTo(w - 29, 166);
+      context.stroke();
+    }, 512, 208);
     const group = new THREE.Group();
-    const cardWidth = 1.67;
-    const cardHeight = 0.98;
-    const radius = 0.068;
-    const shape = new THREE.Shape();
-    shape.moveTo(-cardWidth / 2 + radius, -cardHeight / 2);
-    shape.lineTo(cardWidth / 2 - radius, -cardHeight / 2);
-    shape.quadraticCurveTo(cardWidth / 2, -cardHeight / 2, cardWidth / 2, -cardHeight / 2 + radius);
-    shape.lineTo(cardWidth / 2, cardHeight / 2 - radius);
-    shape.quadraticCurveTo(cardWidth / 2, cardHeight / 2, cardWidth / 2 - radius, cardHeight / 2);
-    shape.lineTo(-cardWidth / 2 + radius, cardHeight / 2);
-    shape.quadraticCurveTo(-cardWidth / 2, cardHeight / 2, -cardWidth / 2, cardHeight / 2 - radius);
-    shape.lineTo(-cardWidth / 2, -cardHeight / 2 + radius);
-    shape.quadraticCurveTo(-cardWidth / 2, -cardHeight / 2, -cardWidth / 2 + radius, -cardHeight / 2);
-    const glass = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.052, bevelEnabled: false, curveSegments: 6 }), new THREE.MeshPhysicalMaterial({ color: 0x102a47, metalness: 0.15, roughness: 0.25, transmission: 0.14, transparent: true, opacity: 0.83, clearcoat: 1, depthWrite: false }));
-    glass.position.z = -0.03;
-    group.add(glass);
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(cardWidth, cardHeight), new THREE.MeshBasicMaterial({ map: cardTexture(index, title, caption), transparent: true, depthWrite: false, toneMapped: false }));
-    face.position.z = 0.035;
+    const geometry = new THREE.PlaneGeometry(1.73, 0.704);
+    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.88, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
     face.userData.chapter = index;
     face.userData.card = group;
     group.add(face);
-    const linePoints = shape.getPoints(40).map(point => new THREE.Vector3(point.x, point.y, 0.042));
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x9fdaff, transparent: true, opacity: 0.48 });
-    group.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(linePoints), edgeMaterial));
-    group.position.copy(position);
-    group.rotation.set(...rotation);
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xa1d9ff, transparent: true, opacity: 0.38, depthWrite: false }));
+    outline.position.z = -0.006;
+    group.add(outline);
     gallery.add(group);
-    const card = { index, group, face, edgeMaterial, basePosition: position.clone(), phase: index * 2.1, scale: 1 };
-    cards.push(card);
+    cards.push({ index, group, face, outline, scale: 1, phase: index * 2.1 });
     pickMeshes.push(face);
+  }
 
-    const end = position.clone();
-    const start = position.clone().multiplyScalar(0.46);
-    const curve = new THREE.CubicBezierCurve3(start, new THREE.Vector3(end.x * 0.30, end.y * 0.72, -0.65), new THREE.Vector3(end.x * 0.83, end.y * 0.66, -0.30), end);
-    const trailMaterial = new THREE.MeshBasicMaterial({ color: 0x6db6f1, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false });
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 45, 0.008, 5, false), trailMaterial);
-    gallery.add(tube);
-    const traveler = new THREE.Mesh(new THREE.SphereGeometry(0.019, 8, 6), new THREE.MeshBasicMaterial({ color: 0xc3e9ff, transparent: true, opacity: 0.87 }));
-    gallery.add(traveler);
-    trails.push({ curve, traveler, tube, index, material: trailMaterial, offset: index * 0.30 });
+  function updateWave(geometry, original, phase) {
+    const position = geometry.attributes.position;
+    const array = position.array;
+    for (let i = 0; i < array.length; i += 3) {
+      const x = original[i];
+      const z = original[i + 2];
+      array[i + 1] = original[i + 1] + Math.sin(x * 0.75 + z * 0.54 + phase) * 0.29 + Math.cos(z * 0.78 - phase * 0.55) * 0.19;
+    }
+    position.needsUpdate = true;
+    // The animated crest remains inside this enlarged bound.
+    if (!geometry.boundingSphere) {
+      geometry.computeBoundingSphere();
+      geometry.boundingSphere.radius += 0.6;
+    }
+  }
+
+  function updateWorldWeight(world, weight) {
+    world.weight = weight;
+    world.group.visible = weight > 0.003;
+    for (const material of world.materials) {
+      material.opacity = material.userData.baseOpacity * weight;
+      material.depthWrite = material.userData.solid && weight > 0.985;
+    }
   }
 
   function applyFrame(delta = 0, animate = false) {
     if (disposed || failed) return;
     if (animate) time += delta;
-    const smoothing = animate ? 1 - Math.exp(-delta * 5.5) : 1;
-    accent.lerp(targetAccent, smoothing);
-    renderedRotation.x += (targetRotation.x + dragRotation.x - renderedRotation.x) * smoothing;
-    renderedRotation.y += (targetRotation.y + dragRotation.y - renderedRotation.y) * smoothing;
-    cameraDistance += (targetDistance - cameraDistance) * smoothing;
-    currentAnchor += (targetAnchor - currentAnchor) * smoothing;
-    camera.position.set(0, 0.04, cameraDistance);
-    camera.lookAt(0, 0, 0);
-    gallery.position.x = currentAnchor;
-    gallery.rotation.x = renderedRotation.x + (motion ? Math.sin(time * 0.27) * 0.018 : 0);
-    gallery.rotation.y = renderedRotation.y + (motion ? Math.sin(time * 0.20) * 0.022 : 0);
-    sculpture.rotation.y = motion ? time * 0.10 : 0;
-    sculpture.rotation.z = motion ? Math.sin(time * 0.16) * 0.025 : 0;
-    ribbon.material.color.copy(accent).lerp(white, 0.63);
-    coreMaterial.color.copy(accent).multiplyScalar(0.55);
-    coreMaterial.emissive.copy(accent).multiplyScalar(0.10);
-    blueLight.color.copy(accent);
-    haloMaterial.color.copy(accent);
-    for (const orbiter of orbiters) {
-      const angle = (motion ? time * orbiter.speed : 0) + orbiter.offset;
-      orbiter.satellite.position.set(Math.cos(angle) * orbiter.radius, Math.sin(angle) * orbiter.radius, 0);
+    const smoothing = animate ? 1 - Math.exp(-delta * 8) : 1;
+    currentScroll += (targetScroll - currentScroll) * smoothing;
+    renderedDrag.lerp(drag, smoothing);
+    const section = Math.min(2, Math.floor(currentScroll));
+    const blend = smoothstep(0, 1, currentScroll - section);
+    accent.copy(palette[section]).lerp(palette[section + 1], blend);
+    backdrop.copy(backgrounds[section]).lerp(backgrounds[section + 1], blend);
+    renderer.setClearColor(backdrop, 0);
+    scene.fog.color.copy(backdrop);
+    rim.color.copy(accent);
+    fill.color.copy(accent);
+    fill.position.set(-0.6, 0.2, 3.1 - currentScroll * spacing);
+
+    const flight = -currentScroll * spacing;
+    const pathX = Math.sin(currentScroll * Math.PI * 0.75) * 0.32;
+    const pathY = Math.sin(currentScroll * Math.PI) * 0.28;
+    const distance = baseDistance * (1 - Math.sin(currentScroll * Math.PI) * 0.035);
+    camera.position.set(pathX + renderedDrag.y * 0.12, pathY + 0.10, flight + distance);
+    lookTarget.set(pathX, pathY * 0.38, flight - 0.4);
+    camera.lookAt(lookTarget);
+    const side = THREE.MathUtils.lerp(section % 2 ? -1 : 1, (section + 1) % 2 ? -1 : 1, blend);
+    gallery.position.x = anchor * side;
+    gallery.position.y = mobile ? -2.15 : 0;
+    // Independent worlds keep the path continuous while their silhouettes change completely.
+    for (let i = 0; i < worlds.length; i++) {
+      const world = worlds[i];
+      const difference = currentScroll - i;
+      const weight = 1 - smoothstep(0.08, 0.96, Math.abs(difference));
+      updateWorldWeight(world, weight);
+      world.group.rotation.x = renderedDrag.x * 0.46 + Math.sin(time * 0.15 + i) * 0.020;
+      world.group.rotation.y = renderedDrag.y * 0.62 + Math.sin(time * 0.12 + i * 1.5) * 0.025;
+      world.group.position.y = difference * 0.14;
+      world.group.scale.setScalar(mobile ? 0.86 : 1);
     }
+    introKnot.rotation.y = 0.08 + time * 0.095 + currentScroll * 0.38;
+    introKnot.rotation.z = -0.35 + Math.sin(time * 0.15) * 0.04;
+    worlds[0].flecks.rotation.z = time * 0.014;
+    for (const [i, orbiter] of orbiters.entries()) {
+      const angle = time * (0.13 + i * 0.025) + orbiter.phase;
+      orbiter.moon.position.set(Math.cos(angle) * orbiter.radius, Math.sin(angle) * orbiter.radius, 0);
+    }
+    achievementCrown.rotation.y = time * 0.13 + (currentScroll - 1) * 0.58;
+    achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
+    for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
+    worlds[1].rings[0].rotation.z = -0.3 + time * 0.06;
+    worlds[1].rings[1].rotation.y = -0.3 + time * 0.035;
+    if (worlds[2].weight > 0.003) {
+      const phase = time * 0.47 + currentScroll * 0.8;
+      updateWave(waveGeometry, waveBase, phase);
+      updateWave(wavePointGeometry, wavePointBase, phase);
+    }
+    for (const [i, portal] of portals.entries()) portal.rotation.z = 0.16 - i * 0.06 + Math.sin(time * 0.2 + i * 0.8) * 0.03;
+    hobbyCube.rotation.set(time * 0.14 + 0.35, time * 0.2 + 0.65, 0.16);
+    hobbyCube.position.y = 0.16 + Math.sin(time * 0.45) * 0.1;
+    worlds[2].paths.rotation.y = time * 0.026;
+    for (const [i, ring] of tunnelRings.entries()) ring.rotation.z = i * 0.16 + time * 0.022;
+    factCore.rotation.set(Math.sin(time * 0.13) * 0.12, time * 0.16, 0.13);
+    nebula.rotation.z = Math.sin(time * 0.045) * 0.08;
+    stars.rotation.z = Math.sin(time * 0.025) * 0.012;
+    stars.position.x = -pathX * 0.2;
+
+    // Floating links inhabit the first orbit; the active chapter retains a smaller token.
     for (const card of cards) {
-      const selected = card.index === chapter;
-      const goalScale = hovered === card.group ? 1.065 : selected ? 1.035 : 1;
+      const initial = 1 - smoothstep(0.05, 0.88, currentScroll);
+      const active = 1 - smoothstep(0.15, 0.63, Math.abs(currentScroll - card.index));
+      const opacity = Math.max(initial * 0.91, active * 0.74);
+      card.group.visible = opacity > 0.04;
+      card.face.material.opacity = opacity;
+      card.outline.material.opacity = opacity * (hovered === card.group ? 0.82 : 0.32);
+      const goalScale = (mobile ? 0.72 : 0.94) * (hovered === card.group ? 1.065 : 1) * (1 - active * (1 - initial) * 0.12);
       card.scale += (goalScale - card.scale) * smoothing;
       card.group.scale.setScalar(card.scale);
-      card.group.position.copy(card.basePosition);
-      if (motion) {
-        card.group.position.y += Math.sin(time * 0.65 + card.phase) * 0.065;
-        card.group.position.z += Math.cos(time * 0.43 + card.phase) * 0.065;
-      }
-      card.edgeMaterial.opacity = hovered === card.group ? 0.97 : selected ? 0.83 : 0.39;
+      const positions = mobile ? [[-0.83, 1.43], [1.05, -0.1], [-0.22, -1.55]] : [[-0.97, 1.71], [1.60, 0.24], [0.60, -1.69]];
+      const [x, y] = positions[card.index - 1];
+      const live = active * (1 - initial);
+      card.group.position.set(x * (1 - live) + (mobile ? 0 : 1.48) * live, y * (1 - live) + (mobile ? -1.92 : -1.72) * live + Math.sin(time * 0.55 + card.phase) * 0.035, flight + 0.85);
+      card.group.rotation.set(renderedDrag.x * 0.14, (card.index === 2 ? -0.12 : 0.09) + renderedDrag.y * 0.25, (card.index - 2) * 0.026);
     }
-    for (const trail of trails) {
-      trail.material.color.copy(accent);
-      const progress = ((motion ? time * 0.12 : 0.18) + trail.offset) % 1;
-      trail.traveler.position.copy(trail.curve.getPoint(progress));
-    }
-    stars.rotation.z = motion ? Math.sin(time * 0.03) * 0.025 : 0;
     scene.updateMatrixWorld();
     renderer.render(scene, camera);
     if (!ready) {
@@ -391,6 +636,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     failed = true;
     cancelAnimationFrame(raf);
     raf = 0;
+    releaseGesture();
     canvas.style.cursor = '';
     onError?.(error instanceof Error ? error : new Error(String(error)));
   }
@@ -419,36 +665,24 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   function resize() {
     if (disposed || failed) return;
     const bounds = canvas.getBoundingClientRect();
-    width = Math.max(1, bounds.width);
-    height = Math.max(1, bounds.height);
-    mobile = width < 760 || width / height < 0.95;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 760 ? 1.5 : 2));
+    const nextWidth = Math.max(1, bounds.width);
+    const nextHeight = Math.max(1, bounds.height);
+    const nextMobile = nextWidth < 760 || nextWidth / nextHeight < 0.95;
+    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, nextMobile ? 1.35 : 1.8);
+    if (nextWidth === width && nextHeight === height && nextPixelRatio === pixelRatio && ready) return;
+    width = nextWidth;
+    height = nextHeight;
+    mobile = nextMobile;
+    pixelRatio = nextPixelRatio;
+    renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    baseDistance = Math.max(8.7, (mobile ? 5.1 : 6.9) / (2 * tangent * camera.aspect));
-    targetDistance = baseDistance * [1, 1.035, 1.015, 1.04][chapter];
-    const viewWidth = 2 * tangent * targetDistance * camera.aspect;
-    targetAnchor = mobile ? 0 : viewWidth * 0.15;
-    for (const card of cards) {
-      if (card.index === 1) card.basePosition.set(mobile ? -0.91 : -1.12, 1.36, 0.25);
-      if (card.index === 2) card.basePosition.set(mobile ? 1.11 : 1.63, 0.30, 0.12);
-      if (card.index === 3) card.basePosition.set(mobile ? 0.20 : 0.74, -1.54, 0.52);
-    }
-    for (const trail of trails) {
-      const end = cards.find(card => card.index === trail.index).basePosition;
-      if (trail.curve.v3.equals(end)) continue;
-      trail.curve.v0.copy(end).multiplyScalar(0.46);
-      trail.curve.v1.set(end.x * 0.30, end.y * 0.72, -0.65);
-      trail.curve.v2.set(end.x * 0.83, end.y * 0.66, -0.30);
-      trail.curve.v3.copy(end);
-      trail.tube.geometry.dispose();
-      trail.tube.geometry = new THREE.TubeGeometry(trail.curve, 45, 0.008, 5, false);
-    }
-    // Resize snaps directly: a large desktop-to-mobile transition never flies across the viewport.
-    cameraDistance = targetDistance;
-    currentAnchor = targetAnchor;
+    // Portrait views retain the entire central silhouette instead of cutting off its orbits.
+    baseDistance = mobile ? Math.max(8.3, 5.25 / (2 * tangent * camera.aspect)) : Math.max(7.8, 5.7 / (2 * tangent * camera.aspect));
+    const viewWidth = 2 * tangent * baseDistance * camera.aspect;
+    anchor = mobile ? 0 : viewWidth * 0.225;
     renderOnce();
   }
 
@@ -459,7 +693,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     scene.updateMatrixWorld();
     camera.updateMatrixWorld();
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObjects(pickMeshes, false)[0]?.object || null;
+    const available = pickMeshes.filter(mesh => mesh.parent.visible && mesh.material.opacity > 0.15);
+    return raycaster.intersectObjects(available, false)[0]?.object || null;
   }
 
   function hover(event) {
@@ -473,16 +708,17 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
 
   function releaseGesture() {
     if (!gesture) return;
-    const pointerId = gesture.id;
+    const id = gesture.id;
     gesture = null;
-    if (canvas.hasPointerCapture?.(pointerId)) canvas.releasePointerCapture(pointerId);
+    if (canvas.hasPointerCapture?.(id)) canvas.releasePointerCapture(id);
     canvas.style.cursor = locked ? '' : hovered ? 'pointer' : 'grab';
   }
 
   function pointerDown(event) {
     if (locked || failed || disposed || gesture || event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    gesture = { id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, travel: 0, dragging: false, scrolling: false, type: event.pointerType };
-    canvas.setPointerCapture?.(event.pointerId);
+    gesture = { id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, travel: 0, dragging: false, type: event.pointerType };
+    // Touch capture is delayed until a horizontal drag, so vertical page scrolling stays native.
+    if (event.pointerType !== 'touch') canvas.setPointerCapture?.(event.pointerId);
     canvas.style.cursor = 'grabbing';
   }
 
@@ -493,19 +729,15 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     const totalY = event.clientY - gesture.startY;
     gesture.travel = Math.max(gesture.travel, Math.hypot(totalX, totalY));
     if (!gesture.dragging && gesture.travel >= 8) {
-      // Horizontal touch gestures rotate; vertical gestures remain native page scrolling.
-      if (gesture.type === 'touch' && Math.abs(totalY) > Math.abs(totalX) * 1.15) {
-        gesture.scrolling = true;
-        releaseGesture();
-        return;
-      }
+      if (gesture.type === 'touch' && Math.abs(totalY) > Math.abs(totalX) * 1.08) { releaseGesture(); return; }
       gesture.dragging = true;
       hovered = null;
+      canvas.setPointerCapture?.(event.pointerId);
     }
     if (gesture.dragging) {
       if (event.cancelable) event.preventDefault();
-      dragRotation.y = THREE.MathUtils.clamp(dragRotation.y + (event.clientX - gesture.lastX) * 0.0048, -0.85, 0.85);
-      dragRotation.x = THREE.MathUtils.clamp(dragRotation.x + (event.clientY - gesture.lastY) * 0.0035, -0.48, 0.48);
+      drag.y = THREE.MathUtils.clamp(drag.y + (event.clientX - gesture.lastX) * 0.0048, -1.0, 1.0);
+      drag.x = THREE.MathUtils.clamp(drag.x + (event.clientY - gesture.lastY) * 0.0035, -0.52, 0.52);
       if (!motion) renderOnce();
     }
     gesture.lastX = event.clientX;
@@ -514,7 +746,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
 
   function pointerUp(event) {
     if (!gesture || gesture.id !== event.pointerId) return;
-    const eligible = !locked && !gesture.dragging && !gesture.scrolling && Math.max(gesture.travel, Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY)) < 8;
+    const eligible = !locked && !gesture.dragging && Math.max(gesture.travel, Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY)) < 8;
     const selected = eligible ? raycast(event) : null;
     releaseGesture();
     if (selected) onSelect?.(selected.userData.chapter);
@@ -545,14 +777,18 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     fail(new Error('The 3D view paused because the browser released its graphics context.'));
   }
 
-  let observer;
   try {
     makeEnvironment();
-    makeSculpture();
+    glowMap = makeGlowMap();
+    makeIntro();
+    makeAchievements();
+    makeHobbies();
+    makeFacts();
+    for (const world of worlds) collectMaterials(world);
     makeStars();
-    makeCard(1, 'Milestones.', 'Little wins. Bigger possibilities.', new THREE.Vector3(-1.12, 1.36, 0.25), [-0.06, 0.17, 0.035]);
-    makeCard(2, 'Side quests.', 'Things I love getting lost in.', new THREE.Vector3(1.63, 0.30, 0.12), [0.08, -0.20, -0.055]);
-    makeCard(3, 'Little secrets.', 'A few unexpected things about me.', new THREE.Vector3(0.74, -1.54, 0.52), [0.045, -0.08, 0.045]);
+    makeCard(1, 'Milestones.', 'ACHIEVEMENTS');
+    makeCard(2, 'Side quests.', 'HOBBIES');
+    makeCard(3, 'Little secrets.', 'RANDOM FACTS');
     canvas.addEventListener('pointerdown', pointerDown);
     canvas.addEventListener('pointermove', pointerMove, { passive: false });
     canvas.addEventListener('pointerup', pointerUp);
@@ -571,14 +807,17 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   }
 
   return {
+    setScroll(value) {
+      if (disposed || failed) return;
+      targetScroll = clampScroll(value);
+      if (!motion) renderOnce();
+      else resume();
+    },
     setChapter(index) {
       if (disposed || failed) return;
-      chapter = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 3);
-      targetAccent.copy(palettes[chapter]);
-      targetDistance = baseDistance * [1, 1.035, 1.015, 1.04][chapter];
-      const rotations = [[0, 0], [-0.08, -0.12], [0.05, 0.16], [0.075, -0.075]];
-      targetRotation.set(...rotations[chapter]);
+      targetScroll = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 3);
       if (!motion) renderOnce();
+      else resume();
     },
     setMotion(enabled) {
       if (disposed || failed) return;
@@ -599,7 +838,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     },
     resetView() {
       if (disposed || failed) return;
-      dragRotation.set(0, 0);
+      drag.set(0, 0);
       hovered = null;
       if (!motion) renderOnce();
     },
@@ -626,7 +865,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       });
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
-      for (const texture of disposableTextures) texture.dispose();
+      for (const texture of textures) texture.dispose();
       environmentTarget?.dispose();
       renderer.dispose();
       canvas.style.cursor = '';
