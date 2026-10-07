@@ -487,14 +487,16 @@ html.no-motion .scroll-portfolio .smile-particle,
   padding: 12px;
   overflow: hidden;
   border: 0;
-  border-radius: 18px;
-  background: transparent;
+  border-radius: 21px;
+  background: linear-gradient(120deg, #12365ab8, #071526b8 70%, #112846b8);
   box-shadow: none;
   color: #f0f6ff;
   text-align: left;
   font-family: var(--sans);
   contain: layout paint;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: none;
   opacity: 0;
 }
 .scroll-portfolio .scene-card-kicker {
@@ -512,7 +514,7 @@ html.no-motion .scroll-portfolio .smile-particle,
   font: 700 21px/1.2 var(--sans);
   letter-spacing: -.025em;
   overflow-wrap: anywhere;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 .scroll-portfolio .scene-card-action {
   display: block;
@@ -665,3 +667,7 @@ html.no-motion .scroll-portfolio .smile-particle,
 
 /* Start the letter reveal as the startup opens, rather than behind its cover. */
 .scroll-portfolio.boot-active:not(.boot-exiting) .reveal-char { animation: none !important; opacity: 0; }
+
+/* Box, words and arrow share one composited panel, so they never drift apart. */
+.scroll-portfolio .scene-card-label:hover { background: linear-gradient(120deg, #173f65de, #0a1b2cde 70%, #17304cde); border: 0; }
+.scroll-portfolio .scene-card-label:focus-visible { outline: 2px solid #acdfff; outline-offset: 3px; }
