@@ -1,7 +1,7 @@
 'use strict';
-import { renderPhotoCollection } from './collection.js?v=20261007-refine4';
-import { createBootScreen } from './boot.js?v=20261007-refine4';
-import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine4';
+import { renderPhotoCollection } from './collection.js?v=20261007-refine5';
+import { createBootScreen } from './boot.js?v=20261007-refine5';
+import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine5';
 let scene;
 let collectionController;
 let bootEntered=false;
@@ -13,7 +13,7 @@ const routes=['introduction','photos','achievements','hobbies','facts'];
 const labels=['Self introduction','Some cool photos','Achievements','Hobbies','Random facts'];
 const defaultSmileyPhrases=[{text:'Hey there! :D'},{text:'Welcome to my little corner of the internet.'},{text:'One more side quest?'}];
 const editorSequence=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a','b','a'];
-const editorUrl=new URL('admin.html?v=20261007-refine4',document.baseURI).href;
+const editorUrl=new URL('admin.html?v=20261007-refine5',document.baseURI).href;
 const penguin=document.querySelector('.site-header .wordmark');
 const secretPanel=document.getElementById('secret-controls');
 const sections=routes.map(id=>document.getElementById(id));
@@ -223,8 +223,8 @@ function renderSceneCardLabels(layouts){
 }
 function sceneFallback(){boot.markSceneReady();sceneCardLayer.hidden=true;document.body.classList.remove('scene-loading');document.querySelector('.scene-fallback').hidden=false;document.getElementById('universe-canvas').hidden=true;document.getElementById('scene-hint').textContent='SCROLL TO EXPLORE';document.getElementById('reset-view').hidden=true;}
 document.body.classList.add('scene-loading');
-import('./scene.js?v=20261007-refine4').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>{document.body.classList.remove('scene-loading');boot.markSceneReady();},onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
+import('./scene.js?v=20261007-refine5').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>{document.body.classList.remove('scene-loading');boot.markSceneReady();},onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
 updateMotion();renderContent();
-fetch('portfolio.json?refresh=20261007-refine4',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();boot.markContentReady();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>{boot.markContentReady();toast('The latest content could not load. Open the live website and refresh to try again.');});
+fetch('portfolio.json?refresh=20261007-refine5',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();boot.markContentReady();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>{boot.markContentReady();toast('The latest content could not load. Open the live website and refresh to try again.');});
 window.addEventListener('pagehide',event=>{if(!event.persisted){scene?.dispose();boot.destroy();soundtrackPlayer.destroy();collectionController?.destroy();revealObserver?.disconnect();positionObserver?.disconnect();cancelAnimationFrame(scrollFrame);}});
 window.addEventListener('pageshow',scheduleScroll);
