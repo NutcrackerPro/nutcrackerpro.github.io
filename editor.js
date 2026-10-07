@@ -22,7 +22,7 @@ function change(){dirty=true;status.textContent='Unsaved draft — download or c
 function imageSource(value){if(typeof value!=='string'||!value.trim())return '';if(/^data:image\/(png|jpeg|webp|gif|avif);base64,[A-Za-z0-9+/=\s]+$/.test(value))return value;try{const u=new URL(value.replace(/^\/(?!\/)/,''),document.baseURI);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}}
 function field(label,value,set,type='text'){
  const wrap=node('label','',label);const input=node(type==='textarea'?'textarea':(type==='select'||type==='journalType')?'select':'input');
- if(type==='select'||type==='journalType'){for(const [v,t] of (type==='journalType'?[['artwork','Artwork'],['travel','Place / travel']]:[['link','Web link'],['email','Email'],['copy','Copy username']])){const option=node('option','',t);option.value=v;input.append(option);}}
+ if(type==='select'||type==='journalType'){for(const [v,t] of (type==='journalType'?[['artwork','Photo'],['travel','Place / travel']]:[['link','Web link'],['email','Email'],['copy','Copy username']])){const option=node('option','',t);option.value=v;input.append(option);}}
  else if(type==='textarea')input.rows=4;else input.type='text';
  input.value=value|| (type==='select'?'link':type==='journalType'?'artwork':'');if(type!=='select'&&type!=='journalType')input.maxLength=type==='textarea'?6000:500;
  input.addEventListener('input',()=>{set(input.value);change();});wrap.append(input);return wrap;
@@ -103,7 +103,7 @@ async function loadPublished(confirmDiscard=true){
   for(const key of Object.keys(schemas))data[key]=Array.isArray(data[key])?data[key]:[];
   draft=data;
   for(const key of scalar)form.elements.namedItem(key).value=typeof draft[key]==='string'?draft[key]:'';
-  document.getElementById('hero-field').replaceChildren(imageField('Homepage artwork',draft.heroImage,v=>{draft.heroImage=v;}));
+  document.getElementById('hero-field').replaceChildren(imageField('Featured photo',draft.heroImage,v=>{draft.heroImage=v;}));
   Object.keys(schemas).forEach(renderList);dirty=false;form.hidden=false;status.textContent='Latest published content loaded. Edit below, then copy or download your changes to publish on GitHub.';
  }catch(error){status.textContent=(error.message||'Could not load your published portfolio.')+(draft?' Your current draft is unchanged.':'');}
  finally{loading=false;refresh.disabled=false;download.disabled=!draft;copy.disabled=!draft;form.inert=false;form.setAttribute('aria-busy','false');}
