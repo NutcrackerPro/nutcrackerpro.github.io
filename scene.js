@@ -19,6 +19,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   renderer.toneMappingExposure = 1.22;
 
   const scene = new THREE.Scene();
+  // We update world matrices once before projection and rendering.
+  scene.matrixWorldAutoUpdate = false;
   scene.fog = new THREE.FogExp2(0x040c1c, 0.019);
   const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100);
   const gallery = new THREE.Group();
@@ -62,10 +64,19 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   let width = 1;
   let height = 1;
   let pixelRatio = 0;
+  let canvasLeft = 0;
+  let canvasTop = 0;
   let baseDistance = 8;
   let anchor = 0;
   let resolutionScale = 1;
   let slowFrames = 0;
+  let animateUntil = 0;
+  let needsRender = false;
+  let lastHover = 0;
+  let statsTimer;
+  const diagnostics = new URLSearchParams(window.location.search).has('scene-stats');
+  const stats = { renders: 0, milliseconds: 0, peak: 0, draws: 0, triangles: 0, lines: 0, points: 0 };
+  let statsWindow = { renders: 0, milliseconds: 0 };
   const spacing = 9;
   const smoothstep = (start, end, value) => THREE.MathUtils.smoothstep(value, start, end);
   const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 4);
@@ -178,6 +189,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
         material.transparent = true;
         material.userData.baseOpacity = material.opacity;
         material.userData.solid = Boolean(material.isMeshPhysicalMaterial || material.isMeshStandardMaterial);
+        material.forceSinglePass = true;
         // Crossfades must not leave an invisible surface masking the next world.
         material.depthWrite = false;
         world.materials.push(material);
@@ -185,7 +197,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     });
   }
 
-  function torus(parent, radius, thickness, material, rotation = [0, 0, 0], segments = mobile ? 56 : 80) {
+  function torus(parent, radius, thickness, material, rotation = [0, 0, 0], segments = mobile ? 36 : 48) {
     const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, thickness, 6, segments), material);
     mesh.rotation.set(...rotation);
     parent.add(mesh);
@@ -194,7 +206,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
 
   function pathTube(parent, points, thickness, material, closed = false) {
     const curve = new THREE.CatmullRomCurve3(points, closed);
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, mobile ? 56 : 80, thickness, 5, closed), material);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, mobile ? 32 : 48, thickness, 4, closed), material);
     parent.add(mesh);
     return mesh;
   }
@@ -227,7 +239,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   }
 
   function makeRibbon(parent) {
-    const segments = mobile ? 112 : 160;
+    const segments = mobile ? 80 : 96;
     const crossSection = [[-0.24, -0.022], [-0.225, -0.043], [0.225, -0.043], [0.24, -0.022], [0.24, 0.022], [0.225, 0.043], [-0.225, 0.043], [-0.24, 0.022]];
     const positions = [];
     const indices = [];
@@ -272,7 +284,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     introKnot = makeRibbon(world.group);
     const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(0.37, 2), ice());
     world.group.add(heart);
-    halo(world.group, 0x4a8fff, 6.6, 0.36, new THREE.Vector3(0, 0, -1.5));
+    halo(world.group, 0x4a8fff, 4.1, 0.21, new THREE.Vector3(0, 0, -1.5));
     for (let i = 0; i < 3; i++) {
       const orbit = new THREE.Group();
       orbit.rotation.set(0.6 + i * 0.54, 0.31 + i * 0.44, -0.36 + i * 0.6);
@@ -285,7 +297,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     }
     const flecks = new THREE.Group();
     const fleckGeometry = new THREE.OctahedronGeometry(0.055, 0);
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 5; i++) {
       const angle = i * 2.399;
       const mesh = new THREE.Mesh(fleckGeometry, ice());
       mesh.position.set(Math.cos(angle) * (2.4 + i * 0.045), Math.sin(angle) * 1.9, -0.6 - i * 0.13);
@@ -334,7 +346,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     photoOrb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), ice());
     photoOrb.position.set(0.04, 0.2, 0.65);
     world.group.add(photoOrb);
-    halo(world.group, 0x647bd6, 6.2, 0.22, new THREE.Vector3(0, 0.1, -2.4));
+    halo(world.group, 0x647bd6, 4.0, 0.14, new THREE.Vector3(0, 0.1, -2.4));
     const points = [];
     for (let i = 0; i < 24; i++) {
       const angle = i * 2.399;
@@ -359,9 +371,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     shell.scale.copy(center.scale);
     shell.rotation.copy(center.rotation);
     achievementCrown.add(shell);
-    halo(world.group, 0x6ca5ff, 7.8, 0.28, new THREE.Vector3(0, 0.1, -2.2));
-    for (let i = 0; i < 12; i++) {
-      const angle = i / 12 * Math.PI * 2;
+    halo(world.group, 0x6ca5ff, 4.8, 0.18, new THREE.Vector3(0, 0.1, -2.2));
+    for (let i = 0; i < 8; i++) {
+      const angle = i / 8 * Math.PI * 2;
       const radius = 1.60 + Math.sin(i * 3.1) * 0.15;
       const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), i % 3 ? ice() : chrome());
       shard.scale.set(0.63, 1.40 + (i % 3) * 0.3, 0.63);
@@ -375,8 +387,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     world.rings = [ring1, ring2];
     const points = [];
     const nodes = [];
-    for (let i = 0; i < 14; i++) {
-      const angle = i / 14 * Math.PI * 2;
+    for (let i = 0; i < 10; i++) {
+      const angle = i / 10 * Math.PI * 2;
       nodes.push(new THREE.Vector3(Math.cos(angle) * (2.45 + i % 2 * 0.32), Math.sin(angle) * 2.0, -1.1 - Math.sin(angle * 3) * 0.42));
     }
     for (let i = 0; i < nodes.length; i++) {
@@ -437,18 +449,18 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     wavePointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     waveBounds(wavePointGeometry);
     world.group.add(new THREE.Points(wavePointGeometry, animateWave(new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false }))));
-    halo(world.group, 0x00d5ff, 8.5, 0.27, new THREE.Vector3(0.3, 0.0, -3.5));
-    for (let i = 0; i < 4; i++) {
+    halo(world.group, 0x00d5ff, 4.8, 0.16, new THREE.Vector3(0.3, 0.0, -3.5));
+    for (let i = 0; i < 3; i++) {
       const portal = new THREE.Group();
       portal.position.set(i * 0.25, 0.10 + i * 0.10, -i * 1.65);
       portal.rotation.set(0.08, -0.10, 0.16 - i * 0.06);
       const material = lightMaterial(i ? 0x287ea8 : 0x81edff, i ? 0.42 : 0.8);
       torus(portal, 1.63 + i * 0.17, i ? 0.013 : 0.024, material);
       torus(portal, 1.77 + i * 0.17, 0.004, lightMaterial(0x47d3f4, 0.30));
-      const ticks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.027, 0.07, 0.025), lightMaterial(0xafefff, i ? 0.5 : 0.8), 12);
+      const ticks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.027, 0.07, 0.025), lightMaterial(0xafefff, i ? 0.5 : 0.8), 8);
       const tickPose = new THREE.Object3D();
-      for (let j = 0; j < 12; j++) {
-        const a = j / 12 * Math.PI * 2;
+      for (let j = 0; j < 8; j++) {
+        const a = j / 8 * Math.PI * 2;
         tickPose.position.set(Math.sin(a) * (1.73 + i * 0.17), Math.cos(a) * (1.73 + i * 0.17), 0);
         tickPose.rotation.z = -a;
         tickPose.scale.set(1, j % 3 ? 1 : 0.15 / 0.07, 1);
@@ -485,12 +497,11 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const world = makeWorld(4);
     nebula = new THREE.Group();
     world.group.add(nebula);
-    halo(nebula, 0x535cc7, 9.4, 0.20, new THREE.Vector3(-0.6, 0.6, -7));
-    halo(nebula, 0x9470dc, 6.3, 0.22, new THREE.Vector3(1.7, -0.7, -5));
-    halo(nebula, 0x739ef1, 3.5, 0.17, new THREE.Vector3(0.2, 0.3, -2));
-    for (let i = 0; i < 11; i++) {
+    halo(nebula, 0x535cc7, 4.8, 0.13, new THREE.Vector3(-0.6, 0.6, -7));
+    halo(nebula, 0x9470dc, 3.8, 0.13, new THREE.Vector3(1.7, -0.7, -5));
+    for (let i = 0; i < 7; i++) {
       const ring = new THREE.Group();
-      const z = 3.0 - i * 1.6;
+      const z = 3.0 - i * 2;
       const x = Math.sin(i * 0.47) * 0.38;
       const y = Math.cos(i * 0.43) * 0.23;
       ring.position.set(x, y, z);
@@ -505,12 +516,12 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       world.group.add(ring);
       tunnelRings.push(ring);
     }
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 5; i++) {
       const points = [];
-      const a = i / 8 * Math.PI * 2;
-      for (let j = 0; j < 11; j++) {
+      const a = i / 5 * Math.PI * 2;
+      for (let j = 0; j < 7; j++) {
         const twist = a + j * 0.16;
-        points.push(new THREE.Vector3(Math.cos(twist) * 2.37 + Math.sin(j * 0.47) * 0.38, Math.sin(twist) * 2.06 + Math.cos(j * 0.43) * 0.23, 3 - j * 1.6));
+        points.push(new THREE.Vector3(Math.cos(twist) * 2.37 + Math.sin(j * 0.47) * 0.38, Math.sin(twist) * 2.06 + Math.cos(j * 0.43) * 0.23, 3 - j * 2));
       }
       pathTube(world.group, points, 0.004, lightMaterial(0x7e7fb8, 0.17));
     }
@@ -527,7 +538,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const colors = [];
     let seed = 4351;
     const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
-    for (let i = 0; i < (mobile ? 120 : 240); i++) {
+    for (let i = 0; i < (mobile ? 70 : 140); i++) {
       const a = random() * Math.PI * 2;
       const radius = 0.4 + Math.pow(random(), 0.5) * 2.0;
       positions.push(Math.cos(a) * radius, Math.sin(a) * radius * 0.85, -1 - random() * 14);
@@ -545,7 +556,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
     const positions = [];
     const colors = [];
-    const count = mobile ? 180 : 360;
+    const count = mobile ? 100 : 180;
     for (let i = 0; i < count; i++) {
       positions.push((random() - 0.5) * 32, (random() - 0.5) * 24, 4 - random() * 77);
       const brightness = 0.22 + random() * 0.7;
@@ -584,16 +595,13 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
 
   function makeCard(index, title, label) {
     const texture = canvasTexture((context, w, h) => {
-      roundedRect(context, 5, 5, w - 10, h - 10, 36);
+      roundedRect(context, 5, 5, w - 10, h - 10, 88);
       const gradient = context.createLinearGradient(0, 0, w, h);
       gradient.addColorStop(0, '#12365a');
       gradient.addColorStop(0.7, '#071526');
       gradient.addColorStop(1, '#112846');
       context.fillStyle = gradient;
       context.fill();
-      context.strokeStyle = '#80b8e9';
-      context.lineWidth = 3;
-      context.stroke();
       if (typeof onCardLayout !== 'function') {
         context.fillStyle = '#b7dcff';
         context.font = '600 34px Arial, sans-serif';
@@ -625,12 +633,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     face.userData.chapter = index;
     face.userData.card = group;
     group.add(face);
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xa1d9ff, transparent: true, opacity: 0.5, depthWrite: false, depthTest: false, fog: false }));
-    outline.renderOrder = 11;
-    outline.position.z = -0.006;
-    group.add(outline);
     gallery.add(group);
-    cards.push({ index, title, label, group, face, outline, scale: 1, opacity: 0, phase: index * 2.1 });
+    cards.push({ index, title, label, group, face, scale: 1, opacity: 0, phase: index * 2.1 });
     pickMeshes.push(face);
   }
 
@@ -654,7 +658,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     if (animate) time += delta;
     const smoothing = animate ? 1 - Math.exp(-delta * 8) : 1;
     currentScroll += (targetScroll - currentScroll) * smoothing;
-    renderedDrag.lerp(drag, smoothing);
+    if (gesture?.dragging) renderedDrag.copy(drag);
+    else renderedDrag.lerp(drag, smoothing);
     const section = Math.min(worlds.length - 2, Math.floor(currentScroll));
     const blend = smoothstep(0, 1, currentScroll - section);
     accent.copy(palette[section]).lerp(palette[section + 1], blend);
@@ -737,7 +742,6 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       card.group.visible = !mobile && opacity > 0.04;
       if (!card.group.visible) continue;
       card.face.material.opacity = opacity * 0.72;
-      card.outline.material.opacity = opacity * (hovered === card.group ? 0.82 : 0.32);
       const goalScale = (mobile ? 0.72 : 0.94) * (hovered === card.group ? 1.065 : 1) * (1 - active * (1 - initial) * 0.12);
       card.scale += (goalScale - card.scale) * smoothing;
       card.group.scale.setScalar(card.scale);
@@ -757,9 +761,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   }
 
   function updatePanelLayout() {
-    gallery.updateMatrixWorld(true);
+    scene.updateMatrixWorld();
     camera.updateMatrixWorld();
-    panelRadius.value = 10 * pixelRatio;
+    panelRadius.value = 21 * pixelRatio;
     panelSoftness.value = 5 * pixelRatio;
     const layouts = [];
     for (const card of cards) {
@@ -801,15 +805,16 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   }
 
   function renderOnce() {
-    if (document.hidden || disposed || failed) return;
-    try { applyFrame(0, false); } catch (error) { fail(error); }
+    requestFrame();
   }
 
   function frame(timestamp) {
     raf = 0;
-    if (!motion || disposed || failed || document.hidden) return;
-    const interacting = gesture?.dragging || Math.abs(targetScroll - currentScroll) > 0.01 || renderedDrag.distanceToSquared(drag) > 0.0001;
-    const frameInterval = 1000 / (interacting ? 60 : 30);
+    if (disposed || failed || document.hidden) return;
+    const settling = Math.abs(targetScroll - currentScroll) > 0.001 || renderedDrag.distanceToSquared(drag) > 0.000001;
+    const animating = motion && (timestamp < animateUntil || settling);
+    if (!needsRender && !animating) return;
+    const frameInterval = 1000 / 30;
     if (lastFrame && timestamp - lastFrame < frameInterval - 0.6) {
       raf = requestAnimationFrame(frame);
       return;
@@ -817,21 +822,38 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const delta = lastFrame ? Math.min(0.08, (timestamp - lastFrame) / 1000) : 0;
     lastFrame = timestamp;
     const start = performance.now();
-    try { applyFrame(delta, true); } catch (error) { fail(error); return; }
-    slowFrames = performance.now() - start > 24 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
-    if (slowFrames >= 24 && resolutionScale > 0.77) {
-      resolutionScale = Math.max(0.77, resolutionScale - 0.12);
+    try { applyFrame(delta, animating); } catch (error) { fail(error); return; }
+    needsRender = false;
+    const duration = performance.now() - start;
+    if (diagnostics) {
+      stats.renders += 1;
+      stats.milliseconds += duration;
+      stats.peak = Math.max(stats.peak, duration);
+      const counts = renderer.info.render;
+      stats.draws = counts.calls;
+      stats.triangles = counts.triangles;
+      stats.lines = counts.lines;
+      stats.points = counts.points;
+    }
+    slowFrames = duration > 16 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+    if (slowFrames >= 6 && resolutionScale > 0.65) {
+      resolutionScale = Math.max(0.65, resolutionScale - 0.1);
       slowFrames = 0;
       resize();
     }
-    raf = requestAnimationFrame(frame);
+    const continuing = motion && (timestamp < animateUntil || Math.abs(targetScroll - currentScroll) > 0.001 || renderedDrag.distanceToSquared(drag) > 0.000001);
+    if ((needsRender || continuing) && !raf) raf = requestAnimationFrame(frame);
   }
 
-  function resume() {
-    if (motion && !document.hidden && !disposed && !failed && !raf) {
-      lastFrame = 0;
-      raf = requestAnimationFrame(frame);
-    }
+  function requestFrame(duration = 0) {
+    if (disposed || failed) return;
+    needsRender = true;
+    if (motion && duration > 0) animateUntil = Math.max(animateUntil, performance.now() + duration);
+    if (!document.hidden && !raf) raf = requestAnimationFrame(frame);
+  }
+
+  function resume(duration = 220) {
+    requestFrame(duration);
   }
 
   function resize() {
@@ -840,7 +862,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     const nextWidth = Math.max(1, bounds.width);
     const nextHeight = Math.max(1, bounds.height);
     const nextMobile = nextWidth < 760 || nextWidth / nextHeight < 0.95;
-    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, Math.max(0.9, (nextMobile ? 1.1 : 1.35) * resolutionScale));
+    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, resolutionScale);
+    canvasLeft = bounds.left;
+    canvasTop = bounds.top;
     if (nextWidth === width && nextHeight === height && nextPixelRatio === pixelRatio && ready) return;
     width = nextWidth;
     height = nextHeight;
@@ -859,11 +883,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   }
 
   function raycast(event) {
-    const bounds = canvas.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return null;
-    pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
-    scene.updateMatrixWorld();
-    camera.updateMatrixWorld();
+    if (!width || !height || !ready) return null;
+    pointer.set((event.clientX - canvasLeft) / width * 2 - 1, 1 - (event.clientY - canvasTop) / height * 2);
     raycaster.setFromCamera(pointer, camera);
     const available = pickMeshes.filter(mesh => mesh.parent.visible && mesh.material.opacity > 0.15);
     return raycaster.intersectObjects(available, false)[0]?.object || null;
@@ -871,11 +892,14 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
 
   function hover(event) {
     if (locked || gesture || failed || event.pointerType === 'touch') return;
+    const now = performance.now();
+    if (now - lastHover < 50) return;
+    lastHover = now;
     const next = raycast(event)?.userData.card || null;
     if (next === hovered) return;
     hovered = next;
     canvas.style.cursor = next ? 'pointer' : 'grab';
-    if (!motion) renderOnce();
+    resume(250);
   }
 
   function releaseGesture() {
@@ -892,6 +916,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     // Touch capture is delayed until a horizontal drag, so vertical page scrolling stays native.
     if (event.pointerType !== 'touch') canvas.setPointerCapture?.(event.pointerId);
     canvas.style.cursor = 'grabbing';
+    resume(160);
   }
 
   function pointerMove(event) {
@@ -912,7 +937,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
       // Yaw is intentionally unbounded: repeated drags can orbit every side.
       drag.y += (event.clientX - gesture.lastX) * yawSensitivity;
       drag.x = THREE.MathUtils.clamp(drag.x + (event.clientY - gesture.lastY) * 0.0055, -1.15, 1.15);
-      if (!motion) renderOnce();
+      resume(160);
     }
     gesture.lastX = event.clientX;
     gesture.lastY = event.clientY;
@@ -922,20 +947,23 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     if (!gesture || gesture.id !== event.pointerId) return;
     const eligible = !locked && !gesture.dragging && Math.max(gesture.travel, Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY)) < 8;
     const selected = eligible ? raycast(event) : null;
+    if (gesture.dragging) renderedDrag.copy(drag);
     releaseGesture();
     if (selected) onSelect?.(selected.userData.chapter);
+    else resume(160);
     if (event.pointerType !== 'touch') hover(event);
   }
 
   function pointerCancel(event) {
-    if (gesture?.id === event.pointerId) releaseGesture();
+    if (gesture?.id === event.pointerId) { releaseGesture(); resume(100); }
   }
 
   function pointerLeave() {
     if (gesture) return;
+    if (!hovered) return;
     hovered = null;
     canvas.style.cursor = locked ? '' : 'grab';
-    if (!motion) renderOnce();
+    resume(250);
   }
 
   function visibilityChange() {
@@ -943,7 +971,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     raf = 0;
     lastFrame = 0;
     releaseGesture();
-    if (!document.hidden) { renderOnce(); resume(); }
+    if (!document.hidden) renderOnce();
   }
 
   function contextLost(event) {
@@ -977,6 +1005,26 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     canvas.style.cursor = 'grab';
     resize();
     resume();
+    if (diagnostics) {
+      statsTimer = window.setInterval(() => {
+        const renders = stats.renders - statsWindow.renders;
+        const milliseconds = stats.milliseconds - statsWindow.milliseconds;
+        console.info('[Portfolio scene stats] '+JSON.stringify({
+          rendersLast2Seconds: renders,
+          totalRenders: stats.renders,
+          averageCpuSubmitMs: renders ? Number((milliseconds / renders).toFixed(2)) : 0,
+          peakCpuSubmitMs: Number(stats.peak.toFixed(2)),
+          lastDrawCalls: stats.draws,
+          lastTriangles: stats.triangles,
+          lastLines: stats.lines,
+          lastPoints: stats.points,
+          pixelRatio,
+          idle: !raf,
+          motion
+        }));
+        statsWindow = { renders: stats.renders, milliseconds: stats.milliseconds };
+      }, 2000);
+    }
   } catch (error) {
     fail(error);
   }
@@ -984,19 +1032,25 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
   return {
     setScroll(value) {
       if (disposed || failed) return;
-      targetScroll = clampScroll(value);
+      const next = clampScroll(value);
+      if (Math.abs(next - targetScroll) < 0.00005) return;
+      targetScroll = next;
       if (!motion) renderOnce();
       else resume();
     },
     setChapter(index) {
       if (disposed || failed) return;
-      targetScroll = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 4);
+      const next = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 4);
+      if (next === targetScroll) return;
+      targetScroll = next;
       if (!motion) renderOnce();
       else resume();
     },
     setMotion(enabled) {
       if (disposed || failed) return;
-      motion = Boolean(enabled);
+      const next = Boolean(enabled);
+      if (next === motion) return;
+      motion = next;
       cancelAnimationFrame(raf);
       raf = 0;
       lastFrame = 0;
@@ -1005,22 +1059,26 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCar
     },
     setLocked(value) {
       if (disposed || failed) return;
-      locked = Boolean(value);
+      const next = Boolean(value);
+      if (next === locked) return;
+      locked = next;
       releaseGesture();
       hovered = null;
       canvas.style.cursor = locked ? '' : 'grab';
-      if (!motion) renderOnce();
+      renderOnce();
     },
     resetView() {
       if (disposed || failed) return;
       drag.set(0, 0);
       hovered = null;
       if (!motion) renderOnce();
+      else resume(250);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       cancelAnimationFrame(raf);
+      if (statsTimer) window.clearInterval(statsTimer);
       releaseGesture();
       observer?.disconnect();
       canvas.removeEventListener('pointerdown', pointerDown);
