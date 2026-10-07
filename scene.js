@@ -7,7 +7,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   let renderer;
   try {
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('A canvas is required for the 3D view.');
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: window.innerWidth >= 760, powerPreference: 'high-performance' });
   } catch (error) {
     onError?.(error);
     return empty;
@@ -59,6 +59,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   let pixelRatio = 0;
   let baseDistance = 8;
   let anchor = 0;
+  let resolutionScale = 1;
+  let slowFrames = 0;
   const spacing = 9;
   const smoothstep = (start, end, value) => THREE.MathUtils.smoothstep(value, start, end);
   const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 3);
@@ -70,8 +72,9 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   const rim = new THREE.DirectionalLight(0x7babff, 5.6);
   rim.position.set(6, 2, -4);
   scene.add(rim);
-  const fill = new THREE.PointLight(0x63b5ff, 24, 18, 2);
-  gallery.add(fill);
+  const fill = new THREE.DirectionalLight(0x63b5ff, 1.8);
+  fill.position.set(-0.6, 0.2, 3.1);
+  scene.add(fill);
 
   function canvasTexture(draw, w = 512, h = 512) {
     const source = document.createElement('canvas');
@@ -106,7 +109,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
         context.fillStyle = strip;
         context.fillRect(x - stripWidth, h * 0.10, stripWidth * 2, h * 0.66);
       }
-    }, 1024, 512);
+    }, 512, 256);
     texture.mapping = THREE.EquirectangularReflectionMapping;
     const generator = new THREE.PMREMGenerator(renderer);
     environmentTarget = generator.fromEquirectangular(texture);
@@ -114,15 +117,17 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     generator.dispose();
   }
 
-  const chrome = () => new THREE.MeshPhysicalMaterial({ color: 0xcbdff2, metalness: 1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.10, iridescence: 0.65, iridescenceIOR: 1.34, iridescenceThicknessRange: [150, 460], transparent: true });
-  const ice = () => new THREE.MeshPhysicalMaterial({ color: 0x9cc6ff, metalness: 0.74, roughness: 0.13, clearcoat: 1, emissive: 0x092548, emissiveIntensity: 0.5, transparent: true });
+  // The studio environment supplies the chrome highlights without the extra
+  // clearcoat and iridescence passes of a physical material.
+  const chrome = () => new THREE.MeshStandardMaterial({ color: 0xcbdff2, metalness: 1, roughness: 0.19, transparent: true });
+  const ice = () => new THREE.MeshStandardMaterial({ color: 0x9cc6ff, metalness: 0.74, roughness: 0.18, emissive: 0x092548, emissiveIntensity: 0.5, transparent: true });
   const lightMaterial = (color, opacity = 0.6) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
 
   function makeWorld(index) {
     const group = new THREE.Group();
     group.position.z = -index * spacing;
     gallery.add(group);
-    const world = { group, materials: [], weight: index ? 0 : 1 };
+    const world = { group, materials: [], weight: -1 };
     worlds.push(world);
     return world;
   }
@@ -144,7 +149,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     });
   }
 
-  function torus(parent, radius, thickness, material, rotation = [0, 0, 0], segments = 120) {
+  function torus(parent, radius, thickness, material, rotation = [0, 0, 0], segments = mobile ? 56 : 80) {
     const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, thickness, 6, segments), material);
     mesh.rotation.set(...rotation);
     parent.add(mesh);
@@ -153,7 +158,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
 
   function pathTube(parent, points, thickness, material, closed = false) {
     const curve = new THREE.CatmullRomCurve3(points, closed);
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, mobile ? 80 : 128, thickness, 5, closed), material);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, mobile ? 56 : 80, thickness, 5, closed), material);
     parent.add(mesh);
     return mesh;
   }
@@ -186,7 +191,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   }
 
   function makeRibbon(parent) {
-    const segments = mobile ? 160 : 230;
+    const segments = mobile ? 112 : 160;
     const crossSection = [[-0.24, -0.022], [-0.225, -0.043], [0.225, -0.043], [0.24, -0.022], [0.24, 0.022], [0.225, 0.043], [-0.225, 0.043], [-0.24, 0.022]];
     const positions = [];
     const indices = [];
@@ -300,15 +305,31 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   }
 
   let waveGeometry;
-  let waveBase;
   let wavePointGeometry;
-  let wavePointBase;
+  const wavePhase = { value: 0 };
   const portals = [];
   let hobbyCube;
+
+  function animateWave(material) {
+    material.onBeforeCompile = shader => {
+      shader.uniforms.uWavePhase = wavePhase;
+      shader.vertexShader = `uniform float uWavePhase;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+        transformed.y += sin(position.x * 0.75 + position.z * 0.54 + uWavePhase) * 0.29
+          + cos(position.z * 0.78 - uWavePhase * 0.55) * 0.19;`);
+    };
+    material.customProgramCacheKey = () => 'portfolio-wave-v2';
+    return material;
+  }
+
+  function waveBounds(geometry) {
+    geometry.computeBoundingSphere();
+    geometry.boundingSphere.radius += 0.6;
+  }
+
   function makeHobbies() {
     const world = makeWorld(2);
-    const columns = mobile ? 30 : 44;
-    const rows = mobile ? 19 : 28;
+    const columns = mobile ? 20 : 30;
+    const rows = mobile ? 14 : 20;
     const positions = [];
     const vertices = [];
     function point(column, row) {
@@ -323,14 +344,14 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       if (row < rows) positions.push(...p, ...point(col, row + 1));
     }
     waveGeometry = new THREE.BufferGeometry();
-    waveBase = new Float32Array(positions);
-    waveGeometry.setAttribute('position', new THREE.BufferAttribute(waveBase.slice(), 3));
-    const grid = new THREE.LineSegments(waveGeometry, new THREE.LineBasicMaterial({ color: 0x31c5ed, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending }));
+    waveGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    waveBounds(waveGeometry);
+    const grid = new THREE.LineSegments(waveGeometry, animateWave(new THREE.LineBasicMaterial({ color: 0x31c5ed, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending })));
     world.group.add(grid);
     wavePointGeometry = new THREE.BufferGeometry();
-    wavePointBase = new Float32Array(vertices);
-    wavePointGeometry.setAttribute('position', new THREE.BufferAttribute(wavePointBase.slice(), 3));
-    world.group.add(new THREE.Points(wavePointGeometry, new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false })));
+    wavePointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    waveBounds(wavePointGeometry);
+    world.group.add(new THREE.Points(wavePointGeometry, animateWave(new THREE.PointsMaterial({ color: 0x8cf4ff, map: glowMap, size: 0.048, transparent: true, opacity: 0.56, blending: THREE.AdditiveBlending, depthWrite: false }))));
     halo(world.group, 0x00d5ff, 8.5, 0.27, new THREE.Vector3(0.3, 0.0, -3.5));
     for (let i = 0; i < 4; i++) {
       const portal = new THREE.Group();
@@ -339,13 +360,17 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       const material = lightMaterial(i ? 0x287ea8 : 0x81edff, i ? 0.42 : 0.8);
       torus(portal, 1.63 + i * 0.17, i ? 0.013 : 0.024, material);
       torus(portal, 1.77 + i * 0.17, 0.004, lightMaterial(0x47d3f4, 0.30));
+      const ticks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.027, 0.07, 0.025), lightMaterial(0xafefff, i ? 0.5 : 0.8), 12);
+      const tickPose = new THREE.Object3D();
       for (let j = 0; j < 12; j++) {
         const a = j / 12 * Math.PI * 2;
-        const tick = new THREE.Mesh(new THREE.BoxGeometry(0.027, j % 3 ? 0.07 : 0.15, 0.025), lightMaterial(0xafefff, i ? 0.5 : 0.8));
-        tick.position.set(Math.sin(a) * (1.73 + i * 0.17), Math.cos(a) * (1.73 + i * 0.17), 0);
-        tick.rotation.z = -a;
-        portal.add(tick);
+        tickPose.position.set(Math.sin(a) * (1.73 + i * 0.17), Math.cos(a) * (1.73 + i * 0.17), 0);
+        tickPose.rotation.z = -a;
+        tickPose.scale.set(1, j % 3 ? 1 : 0.15 / 0.07, 1);
+        tickPose.updateMatrix();
+        ticks.setMatrixAt(j, tickPose.matrix);
       }
+      portal.add(ticks);
       world.group.add(portal);
       portals.push(portal);
     }
@@ -417,7 +442,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     const colors = [];
     let seed = 4351;
     const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
-    for (let i = 0; i < (mobile ? 280 : 450); i++) {
+    for (let i = 0; i < (mobile ? 120 : 240); i++) {
       const a = random() * Math.PI * 2;
       const radius = 0.4 + Math.pow(random(), 0.5) * 2.0;
       positions.push(Math.cos(a) * radius, Math.sin(a) * radius * 0.85, -1 - random() * 14);
@@ -435,7 +460,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     const random = () => { seed = seed * 16807 % 2147483647; return (seed - 1) / 2147483646; };
     const positions = [];
     const colors = [];
-    const count = mobile ? 490 : 840;
+    const count = mobile ? 180 : 360;
     for (let i = 0; i < count; i++) {
       positions.push((random() - 0.5) * 32, (random() - 0.5) * 24, 4 - random() * 77);
       const brightness = 0.22 + random() * 0.7;
@@ -474,42 +499,47 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
 
   function makeCard(index, title, label) {
     const texture = canvasTexture((context, w, h) => {
-      roundedRect(context, 5, 5, w - 10, h - 10, 22);
+      roundedRect(context, 5, 5, w - 10, h - 10, 36);
       const gradient = context.createLinearGradient(0, 0, w, h);
-      gradient.addColorStop(0, '#183658');
-      gradient.addColorStop(0.7, '#09172c');
-      gradient.addColorStop(1, '#17264a');
+      gradient.addColorStop(0, '#12365a');
+      gradient.addColorStop(0.7, '#071526');
+      gradient.addColorStop(1, '#112846');
       context.fillStyle = gradient;
       context.fill();
-      context.strokeStyle = 'rgba(158,213,255,0.6)';
-      context.lineWidth = 1.5;
+      context.strokeStyle = '#80b8e9';
+      context.lineWidth = 3;
       context.stroke();
-      context.fillStyle = '#7cb8e8';
-      context.font = '500 16px Arial, sans-serif';
-      context.fillText(`0${index + 1} / ${label}`, 28, 46);
-      context.fillStyle = '#e7f4ff';
-      context.font = '400 42px Georgia, serif';
-      context.fillText(title, 27, 113);
-      context.fillStyle = '#98bcde';
-      context.font = '400 15px Arial, sans-serif';
-      context.fillText('EXPLORE CHAPTER', 29, 169);
-      context.strokeStyle = '#bddfff';
-      context.lineWidth = 1.6;
+      context.fillStyle = '#b7dcff';
+      context.font = '600 34px Arial, sans-serif';
+      context.fillText(`0${index + 1} / ${label}`, 54, 86);
+      context.fillStyle = '#ffffff';
+      context.font = '600 88px Arial, sans-serif';
+      context.fillText(title, 51, 232);
+      context.fillStyle = '#c7e4ff';
+      context.font = '600 34px Arial, sans-serif';
+      context.fillText('EXPLORE', 55, 342);
+      context.strokeStyle = '#d2eeff';
+      context.lineWidth = 4;
       context.beginPath();
-      context.moveTo(w - 48, 172);
-      context.lineTo(w - 29, 152);
-      context.moveTo(w - 43, 152);
-      context.lineTo(w - 29, 152);
-      context.lineTo(w - 29, 166);
+      context.moveTo(w - 105, 345);
+      context.lineTo(w - 60, 300);
+      context.moveTo(w - 95, 300);
+      context.lineTo(w - 60, 300);
+      context.lineTo(w - 60, 335);
       context.stroke();
-    }, 512, 208);
+    }, 1024, 416);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
     const group = new THREE.Group();
-    const geometry = new THREE.PlaneGeometry(1.73, 0.704);
-    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.88, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    const geometry = new THREE.PlaneGeometry(2.08, 0.845);
+    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 1, depthWrite: false, depthTest: false, toneMapped: false, fog: false }));
+    face.renderOrder = 10;
     face.userData.chapter = index;
     face.userData.card = group;
     group.add(face);
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xa1d9ff, transparent: true, opacity: 0.38, depthWrite: false }));
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xa1d9ff, transparent: true, opacity: 0.5, depthWrite: false, depthTest: false, fog: false }));
+    outline.renderOrder = 11;
     outline.position.z = -0.006;
     group.add(outline);
     gallery.add(group);
@@ -517,25 +547,15 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     pickMeshes.push(face);
   }
 
-  function updateWave(geometry, original, phase) {
-    const position = geometry.attributes.position;
-    const array = position.array;
-    for (let i = 0; i < array.length; i += 3) {
-      const x = original[i];
-      const z = original[i + 2];
-      array[i + 1] = original[i + 1] + Math.sin(x * 0.75 + z * 0.54 + phase) * 0.29 + Math.cos(z * 0.78 - phase * 0.55) * 0.19;
-    }
-    position.needsUpdate = true;
-    // The animated crest remains inside this enlarged bound.
-    if (!geometry.boundingSphere) {
-      geometry.computeBoundingSphere();
-      geometry.boundingSphere.radius += 0.6;
-    }
-  }
-
   function updateWorldWeight(world, weight) {
+    if (weight <= 0.02) {
+      world.weight = 0;
+      world.group.visible = false;
+      return;
+    }
+    if (world.group.visible && Math.abs(world.weight - weight) < 0.0003) return;
     world.weight = weight;
-    world.group.visible = weight > 0.003;
+    world.group.visible = true;
     for (const material of world.materials) {
       material.opacity = material.userData.baseOpacity * weight;
       material.depthWrite = material.userData.solid && weight > 0.985;
@@ -556,13 +576,12 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     scene.fog.color.copy(backdrop);
     rim.color.copy(accent);
     fill.color.copy(accent);
-    fill.position.set(-0.6, 0.2, 3.1 - currentScroll * spacing);
 
     const flight = -currentScroll * spacing;
     const pathX = Math.sin(currentScroll * Math.PI * 0.75) * 0.32;
     const pathY = Math.sin(currentScroll * Math.PI) * 0.28;
     const distance = baseDistance * (1 - Math.sin(currentScroll * Math.PI) * 0.035);
-    camera.position.set(pathX + renderedDrag.y * 0.12, pathY + 0.10, flight + distance);
+    camera.position.set(pathX, pathY + 0.10, flight + distance);
     lookTarget.set(pathX, pathY * 0.38, flight - 0.4);
     camera.lookAt(lookTarget);
     const side = THREE.MathUtils.lerp(section % 2 ? -1 : 1, (section + 1) % 2 ? -1 : 1, blend);
@@ -574,35 +593,40 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       const difference = currentScroll - i;
       const weight = 1 - smoothstep(0.08, 0.96, Math.abs(difference));
       updateWorldWeight(world, weight);
-      world.group.rotation.x = renderedDrag.x * 0.46 + Math.sin(time * 0.15 + i) * 0.020;
-      world.group.rotation.y = renderedDrag.y * 0.62 + Math.sin(time * 0.12 + i * 1.5) * 0.025;
+      if (!world.group.visible) continue;
+      world.group.rotation.x = renderedDrag.x + Math.sin(time * 0.15 + i) * 0.020;
+      world.group.rotation.y = renderedDrag.y + Math.sin(time * 0.12 + i * 1.5) * 0.025;
       world.group.position.y = difference * 0.14;
       world.group.scale.setScalar(mobile ? 0.86 : 1);
     }
-    introKnot.rotation.y = 0.08 + time * 0.095 + currentScroll * 0.38;
-    introKnot.rotation.z = -0.35 + Math.sin(time * 0.15) * 0.04;
-    worlds[0].flecks.rotation.z = time * 0.014;
-    for (const [i, orbiter] of orbiters.entries()) {
-      const angle = time * (0.13 + i * 0.025) + orbiter.phase;
-      orbiter.moon.position.set(Math.cos(angle) * orbiter.radius, Math.sin(angle) * orbiter.radius, 0);
+    if (worlds[0].group.visible) {
+      introKnot.rotation.y = 0.08 + time * 0.095 + currentScroll * 0.38;
+      introKnot.rotation.z = -0.35 + Math.sin(time * 0.15) * 0.04;
+      worlds[0].flecks.rotation.z = time * 0.014;
+      for (const [i, orbiter] of orbiters.entries()) {
+        const angle = time * (0.13 + i * 0.025) + orbiter.phase;
+        orbiter.moon.position.set(Math.cos(angle) * orbiter.radius, Math.sin(angle) * orbiter.radius, 0);
+      }
     }
-    achievementCrown.rotation.y = time * 0.13 + (currentScroll - 1) * 0.58;
-    achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
-    for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
-    worlds[1].rings[0].rotation.z = -0.3 + time * 0.06;
-    worlds[1].rings[1].rotation.y = -0.3 + time * 0.035;
-    if (worlds[2].weight > 0.003) {
-      const phase = time * 0.47 + currentScroll * 0.8;
-      updateWave(waveGeometry, waveBase, phase);
-      updateWave(wavePointGeometry, wavePointBase, phase);
+    if (worlds[1].group.visible) {
+      achievementCrown.rotation.y = time * 0.13 + (currentScroll - 1) * 0.58;
+      achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
+      for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
+      worlds[1].rings[0].rotation.z = -0.3 + time * 0.06;
+      worlds[1].rings[1].rotation.y = -0.3 + time * 0.035;
     }
-    for (const [i, portal] of portals.entries()) portal.rotation.z = 0.16 - i * 0.06 + Math.sin(time * 0.2 + i * 0.8) * 0.03;
-    hobbyCube.rotation.set(time * 0.14 + 0.35, time * 0.2 + 0.65, 0.16);
-    hobbyCube.position.y = 0.16 + Math.sin(time * 0.45) * 0.1;
-    worlds[2].paths.rotation.y = time * 0.026;
-    for (const [i, ring] of tunnelRings.entries()) ring.rotation.z = i * 0.16 + time * 0.022;
-    factCore.rotation.set(Math.sin(time * 0.13) * 0.12, time * 0.16, 0.13);
-    nebula.rotation.z = Math.sin(time * 0.045) * 0.08;
+    if (worlds[2].group.visible) {
+      wavePhase.value = time * 0.47 + currentScroll * 0.8;
+      for (const [i, portal] of portals.entries()) portal.rotation.z = 0.16 - i * 0.06 + Math.sin(time * 0.2 + i * 0.8) * 0.03;
+      hobbyCube.rotation.set(time * 0.14 + 0.35, time * 0.2 + 0.65, 0.16);
+      hobbyCube.position.y = 0.16 + Math.sin(time * 0.45) * 0.1;
+      worlds[2].paths.rotation.y = time * 0.026;
+    }
+    if (worlds[3].group.visible) {
+      for (const [i, ring] of tunnelRings.entries()) ring.rotation.z = i * 0.16 + time * 0.022;
+      factCore.rotation.set(Math.sin(time * 0.13) * 0.12, time * 0.16, 0.13);
+      nebula.rotation.z = Math.sin(time * 0.045) * 0.08;
+    }
     stars.rotation.z = Math.sin(time * 0.025) * 0.012;
     stars.position.x = -pathX * 0.2;
 
@@ -610,20 +634,23 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     for (const card of cards) {
       const initial = 1 - smoothstep(0.05, 0.88, currentScroll);
       const active = 1 - smoothstep(0.15, 0.63, Math.abs(currentScroll - card.index));
-      const opacity = Math.max(initial * 0.91, active * 0.74);
-      card.group.visible = opacity > 0.04;
+      const opacity = Math.max(initial, active * 0.96);
+      // On a phone these tiny canvas labels become unreadable. The equivalent
+      // chapter links remain available in the normal, accessible navigation.
+      card.group.visible = !mobile && opacity > 0.04;
+      if (!card.group.visible) continue;
       card.face.material.opacity = opacity;
       card.outline.material.opacity = opacity * (hovered === card.group ? 0.82 : 0.32);
       const goalScale = (mobile ? 0.72 : 0.94) * (hovered === card.group ? 1.065 : 1) * (1 - active * (1 - initial) * 0.12);
       card.scale += (goalScale - card.scale) * smoothing;
       card.group.scale.setScalar(card.scale);
-      const positions = mobile ? [[-0.83, 1.43], [1.05, -0.1], [-0.22, -1.55]] : [[-0.97, 1.71], [1.60, 0.24], [0.60, -1.69]];
+      const positions = mobile ? [[-0.83, 1.43], [1.05, -0.1], [-0.22, -1.55]] : [[-0.97, 1.15], [0.42, 0.10], [0.10, -0.95]];
       const [x, y] = positions[card.index - 1];
       const live = active * (1 - initial);
-      card.group.position.set(x * (1 - live) + (mobile ? 0 : 1.48) * live, y * (1 - live) + (mobile ? -1.92 : -1.72) * live + Math.sin(time * 0.55 + card.phase) * 0.035, flight + 0.85);
-      card.group.rotation.set(renderedDrag.x * 0.14, (card.index === 2 ? -0.12 : 0.09) + renderedDrag.y * 0.25, (card.index - 2) * 0.026);
+      card.group.position.set(x * (1 - live) + (mobile ? 0 : 0.35) * live, y * (1 - live) + (mobile ? -1.92 : -1.72) * live + Math.sin(time * 0.55 + card.phase) * 0.035, flight + 0.85);
+      // Navigation should stay readable while the sculpture rotates freely.
+      card.group.quaternion.copy(camera.quaternion);
     }
-    scene.updateMatrixWorld();
     renderer.render(scene, camera);
     if (!ready) {
       ready = true;
@@ -649,9 +676,22 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   function frame(timestamp) {
     raf = 0;
     if (!motion || disposed || failed || document.hidden) return;
-    const delta = lastFrame ? Math.min(0.04, (timestamp - lastFrame) / 1000) : 0;
+    const interacting = gesture?.dragging || Math.abs(targetScroll - currentScroll) > 0.01 || renderedDrag.distanceToSquared(drag) > 0.0001;
+    const frameInterval = 1000 / (interacting ? 60 : 30);
+    if (lastFrame && timestamp - lastFrame < frameInterval - 0.6) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
+    const delta = lastFrame ? Math.min(0.08, (timestamp - lastFrame) / 1000) : 0;
     lastFrame = timestamp;
+    const start = performance.now();
     try { applyFrame(delta, true); } catch (error) { fail(error); return; }
+    slowFrames = performance.now() - start > 24 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+    if (slowFrames >= 24 && resolutionScale > 0.77) {
+      resolutionScale = Math.max(0.77, resolutionScale - 0.12);
+      slowFrames = 0;
+      resize();
+    }
     raf = requestAnimationFrame(frame);
   }
 
@@ -668,7 +708,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     const nextWidth = Math.max(1, bounds.width);
     const nextHeight = Math.max(1, bounds.height);
     const nextMobile = nextWidth < 760 || nextWidth / nextHeight < 0.95;
-    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, nextMobile ? 1.35 : 1.8);
+    const nextPixelRatio = Math.min(window.devicePixelRatio || 1, Math.max(0.9, (nextMobile ? 1.1 : 1.35) * resolutionScale));
     if (nextWidth === width && nextHeight === height && nextPixelRatio === pixelRatio && ready) return;
     width = nextWidth;
     height = nextHeight;
@@ -736,8 +776,10 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     }
     if (gesture.dragging) {
       if (event.cancelable) event.preventDefault();
-      drag.y = THREE.MathUtils.clamp(drag.y + (event.clientX - gesture.lastX) * 0.0048, -1.0, 1.0);
-      drag.x = THREE.MathUtils.clamp(drag.x + (event.clientY - gesture.lastY) * 0.0035, -0.52, 0.52);
+      const yawSensitivity = Math.PI * 2 / Math.max(360, Math.min(width, 900));
+      // Yaw is intentionally unbounded: repeated drags can orbit every side.
+      drag.y += (event.clientX - gesture.lastX) * yawSensitivity;
+      drag.x = THREE.MathUtils.clamp(drag.x + (event.clientY - gesture.lastY) * 0.0055, -1.15, 1.15);
       if (!motion) renderOnce();
     }
     gesture.lastX = event.clientX;
@@ -862,6 +904,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       scene.traverse(object => {
         if (object.geometry) geometries.add(object.geometry);
         if (object.material) for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+        if (object.isInstancedMesh) object.dispose();
       });
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
