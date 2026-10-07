@@ -1,19 +1,21 @@
 'use strict';
-import { renderPhotoCollection } from './collection.js?v=20261007-refine6';
-import { createBootScreen } from './boot.js?v=20261007-refine6';
-import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine6';
+import { renderPhotoCollection } from './collection.js?v=20261007-refine7';
+import { createBootScreen } from './boot.js?v=20261007-refine7';
+import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine7';
 let scene;
 let collectionController;
 let bootEntered=false;
+let startupProgress=0;
 const soundtrackPlayer=createSoundtrackPlayer();
-const boot=createBootScreen({name:'Nutcracker',onEnter(){bootEntered=true;syncScene();scheduleScroll();navigate(routeIndex(),{updateHistory:false});}});
+const boot=createBootScreen({name:'Nutcracker',onProgress(progress){startupProgress=progress;scene?.setStartupProgress(progress);},onEnter(){bootEntered=true;syncScene();scheduleScroll();const target=routeIndex();if(target>0)navigate(target,{updateHistory:false});}});
 const sceneCardNodes=new Map();
 const sceneCardLayer=document.getElementById('scene-card-labels');
+sceneCardLayer.inert=true;
 const routes=['introduction','photos','achievements','hobbies','facts'];
 const labels=['Self introduction','Some cool photos','Achievements','Hobbies','Random facts'];
 const defaultSmileyPhrases=[{text:'Hey there! :D'},{text:'Welcome to my little corner of the internet.'},{text:'One more side quest?'}];
 const editorSequence=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a','b','a'];
-const editorUrl=new URL('admin.html?v=20261007-refine6',document.baseURI).href;
+const editorUrl=new URL('admin.html?v=20261007-refine7',document.baseURI).href;
 const penguin=document.querySelector('.site-header .wordmark');
 const secretPanel=document.getElementById('secret-controls');
 const sections=routes.map(id=>document.getElementById(id));
@@ -133,11 +135,14 @@ function renderContent(){
  }
  contacts();preparePortfolioText();observeReveals();scheduleScroll();
 }
+let journeyColor='';
+const worldBackdrop=document.querySelector('.world-backdrop');
 const palette=[[164,198,255],[150,162,255],[124,209,255],[95,233,246],[137,159,255]];
 function smoothstep(x){return x*x*(3-2*x);}
 function updateScroll(){
  scrollFrame=0;if(editorMode)return;
- const y=window.scrollY;const height=window.innerHeight;
+ if(!bootEntered){scrollValue=0;scene?.setScroll(0);return;}
+ const y=window.scrollY;const height=window.innerHeight;const pageHeight=document.documentElement.scrollHeight;
  const anchors=sections.map((section,i)=>i===0?0:y+section.getBoundingClientRect().top-height*.27);
  const last=routes.length-1;let current=last;for(let i=0;i<last;i++)if(y<anchors[i+1]){current=i;break;}
  const local=current<last?Math.max(0,Math.min(1,(y-anchors[current])/Math.max(1,anchors[current+1]-anchors[current]))):1;
@@ -145,15 +150,15 @@ function updateScroll(){
  scrollValue=current+blend;scene?.setScroll(scrollValue);
  const low=Math.min(last,Math.floor(scrollValue)),high=Math.min(last,low+1),weight=scrollValue-low;
  const rgb=palette[low].map((v,i)=>Math.round(v+(palette[high][i]-v)*weight));
- document.body.style.setProperty('--journey-rgb',rgb.join(' '));document.body.style.setProperty('--journey-accent',`rgb(${rgb.join(' ')})`);
- document.body.style.setProperty('--scroll-phase',String(scrollValue));document.body.style.setProperty('--glow-x',(50+Math.cos(scrollValue*Math.PI)*23)+'%');
+ const color=rgb.join(' ');if(color!==journeyColor){journeyColor=color;document.body.style.setProperty('--journey-rgb',color);document.body.style.setProperty('--journey-accent',`rgb(${color})`);}
+ worldBackdrop.style.setProperty('--glow-x',(50+Math.cos(scrollValue*Math.PI)*23).toFixed(1)+'%');
  const nearest=Math.min(last,Math.round(scrollValue));
  document.body.dataset.world=String(nearest);
- document.getElementById('journey-progress').style.transform=`scaleY(${Math.max(.025,Math.min(1,y/Math.max(1,document.documentElement.scrollHeight-height)))})`;
+ document.getElementById('journey-progress').style.transform=`scaleY(${Math.max(.025,Math.min(1,y/Math.max(1,pageHeight-height)))})`;
  if(nearest!==active||!document.body.dataset.scrollReady){active=nearest;document.body.dataset.scrollReady='true';document.querySelectorAll('[data-slide]').forEach(link=>{if(link.dataset.slide===routes[active])link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});}
 }
 function scheduleScroll(){if(!scrollFrame)scrollFrame=requestAnimationFrame(updateScroll);}
-function syncScene(){scene?.setMotion(bootEntered&&!motionOff()&&!editorMode&&!photoDialog.open);scene?.setLocked(!bootEntered||editorMode||photoDialog.open);}
+function syncScene(){sceneCardLayer.inert=!bootEntered||editorMode||photoDialog.open;const allowed=!motionOff()&&!editorMode&&!photoDialog.open;scene?.setStartupProgress(bootEntered?1:startupProgress);scene?.setStartupMotion(!bootEntered&&allowed);scene?.setMotion(bootEntered&&allowed);scene?.setLocked(!bootEntered||editorMode||photoDialog.open);}
 function updateMotion(){document.documentElement.classList.toggle('no-motion',motionOff());const button=document.getElementById('motion-toggle');button.replaceChildren(icon('motion'),document.createTextNode(motionOff()?' Motion off':' Motion on'));button.setAttribute('aria-pressed',String(motionOff()));button.setAttribute('aria-label',reduceQuery.matches?'Motion off, following your device preference':(motionOff()?'Turn animations on':'Turn animations off'));button.disabled=reduceQuery.matches;syncScene();observeReveals();scheduleScroll();}
 function chooseChapter(index){navigate(index,{focus:true});}
 penguin.addEventListener('click',event=>{
@@ -216,15 +221,18 @@ photoDialog.addEventListener('close',syncScene);photoDialog.addEventListener('cl
 let positionObserver;if('ResizeObserver' in window){positionObserver=new ResizeObserver(scheduleScroll);sections.forEach(section=>positionObserver.observe(section));}
 function renderSceneCardLabels(layouts){
  for(const layout of layouts){
-  let node=sceneCardNodes.get(layout.index);if(!node){node=n('div','scene-card-label');node.append(n('span','scene-card-kicker',layout.label),n('span','scene-card-title',layout.title),n('span','scene-card-action','Explore'),icon('external'));sceneCardLayer.append(node);sceneCardNodes.set(layout.index,node);}
-  node.hidden=!layout.visible;if(!layout.visible)continue;
-  const {x,y,width,height}=layout.rect;const styles=[Math.round(x),Math.round(y),Math.round(width),Math.round(height),layout.opacity.toFixed(3)].join('/');if(node.dataset.layout===styles)continue;node.dataset.layout=styles;node.style.transform=`translate(${Math.round(x)}px,${Math.round(y)}px)`;node.style.width=Math.round(width)+'px';node.style.height=Math.round(height)+'px';node.style.setProperty('--card-scale',String(Math.min(1,Math.max(.45,height/112))));node.style.opacity=String(layout.opacity);
+  let node=sceneCardNodes.get(layout.index);if(!node){node=n('button','scene-card-label');node.type='button';node.setAttribute('aria-label','Explore '+layout.title);node.addEventListener('click',()=>chooseChapter(layout.index));node.append(n('span','scene-card-kicker',layout.label),n('span','scene-card-title',layout.title),n('span','scene-card-action','Explore'),icon('external'));sceneCardLayer.append(node);sceneCardNodes.set(layout.index,node);}
+  if(node.hidden===layout.visible)node.hidden=!layout.visible;if(!layout.visible)continue;
+  const {x,y,width,height}=layout.rect;
+  const position=Math.round(x)+'/'+Math.round(y);if(node.dataset.position!==position){node.dataset.position=position;node.style.transform=`translate(${Math.round(x)}px,${Math.round(y)}px)`;}
+  const size=Math.round(width)+'/'+Math.round(height);if(node.dataset.size!==size){node.dataset.size=size;node.style.width=Math.round(width)+'px';node.style.height=Math.round(height)+'px';const scale=Math.min(1,Math.max(.45,height/112)).toFixed(2);if(node.dataset.scale!==scale){node.dataset.scale=scale;node.style.setProperty('--card-scale',scale);}}
+  const opacity=layout.opacity.toFixed(3);if(node.dataset.opacity!==opacity){node.dataset.opacity=opacity;node.style.opacity=opacity;}
  }
 }
 function sceneFallback(){boot.markSceneReady();sceneCardLayer.hidden=true;document.body.classList.remove('scene-loading');document.querySelector('.scene-fallback').hidden=false;document.getElementById('universe-canvas').hidden=true;document.getElementById('scene-hint').textContent='SCROLL TO EXPLORE';document.getElementById('reset-view').hidden=true;}
 document.body.classList.add('scene-loading');
-import('./scene.js?v=20261007-refine6').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>{document.body.classList.remove('scene-loading');boot.markSceneReady();},onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
+import('./scene.js?v=20261007-refine7').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>{document.body.classList.remove('scene-loading');boot.markSceneReady();},onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
 updateMotion();renderContent();
-fetch('portfolio.json?refresh=20261007-refine6',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();boot.markContentReady();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>{boot.markContentReady();toast('The latest content could not load. Open the live website and refresh to try again.');});
+fetch('portfolio.json?refresh=20261007-refine7',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();boot.markContentReady();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>{boot.markContentReady();toast('The latest content could not load. Open the live website and refresh to try again.');});
 window.addEventListener('pagehide',event=>{if(!event.persisted){scene?.dispose();boot.destroy();soundtrackPlayer.destroy();collectionController?.destroy();revealObserver?.disconnect();positionObserver?.disconnect();cancelAnimationFrame(scrollFrame);}});
 window.addEventListener('pageshow',scheduleScroll);
