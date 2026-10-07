@@ -1,6 +1,6 @@
 # Nutcracker's Portfolio
 
-A dark grey and blue personal portfolio with four sections: Self introduction, Achievements, Hobbies, and Random facts.
+An interactive 3D personal universe with four chapters: Self introduction, Achievements, Hobbies, and Random facts. Drag the gallery to rotate it, click a floating chapter to read it, or use the navigation and arrow controls. The 3D sculpture, particles, lights and chapter panels use locally bundled Three.js 0.180.0 under its MIT license. A static photo view appears when WebGL is unavailable. Motion can be turned off and device reduced-motion preferences are respected. Award photos open at full size. Content and the existing editor still use portfolio.json without any schema migration.
 
 ## Hosting
 
