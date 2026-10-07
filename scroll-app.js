@@ -1,14 +1,19 @@
 'use strict';
-import { renderPhotoCollection } from './collection.js?v=20261007-refine3';
+import { renderPhotoCollection } from './collection.js?v=20261007-refine4';
+import { createBootScreen } from './boot.js?v=20261007-refine4';
+import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine4';
 let scene;
 let collectionController;
+let bootEntered=false;
+const soundtrackPlayer=createSoundtrackPlayer();
+const boot=createBootScreen({name:'Nutcracker',onEnter(){bootEntered=true;syncScene();scheduleScroll();navigate(routeIndex(),{updateHistory:false});}});
 const sceneCardNodes=new Map();
 const sceneCardLayer=document.getElementById('scene-card-labels');
 const routes=['introduction','photos','achievements','hobbies','facts'];
 const labels=['Self introduction','Some cool photos','Achievements','Hobbies','Random facts'];
 const defaultSmileyPhrases=[{text:'Hey there! :D'},{text:'Welcome to my little corner of the internet.'},{text:'One more side quest?'}];
 const editorSequence=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a','b','a'];
-const editorUrl=new URL('admin.html?v=20261007-refine3',document.baseURI).href;
+const editorUrl=new URL('admin.html?v=20261007-refine4',document.baseURI).href;
 const penguin=document.querySelector('.site-header .wordmark');
 const secretPanel=document.getElementById('secret-controls');
 const sections=routes.map(id=>document.getElementById(id));
@@ -100,9 +105,9 @@ function setupSecretControls(){
 setupSecretControls();
 function routeIndex(){return Math.max(0,routes.indexOf(location.hash.slice(1)));}
 function navigate(index,{focus=false,updateHistory=true}={}){
- if(editorMode||index<0||index>=routes.length||photoDialog.open)return;
+ if(!bootEntered||editorMode||index<0||index>=routes.length||photoDialog.open)return;
  const target=sections[index];if(updateHistory&&location.hash!=='#'+routes[index])history.pushState(null,'','#'+routes[index]);
- const top=Math.max(0,window.scrollY+target.getBoundingClientRect().top-document.querySelector('.site-header').getBoundingClientRect().bottom-26);
+ const top=index===0?0:Math.max(0,window.scrollY+target.getBoundingClientRect().top-document.querySelector('.site-header').getBoundingClientRect().bottom-26);
  window.scrollTo({top,behavior:motionOff()?'instant':'smooth'});
  if(focus){const heading=target.querySelector('h1,h2');heading.tabIndex=-1;heading.focus({preventScroll:true});}
  scheduleScroll();
@@ -116,12 +121,10 @@ function observeReveals(){
 }
 function renderContent(){
  document.getElementById('brand-name').textContent=text(data.name,'Nutcracker');
+ boot.setName(text(data.name,'Nutcracker'));soundtrackPlayer.setTracks(data.soundtracks);
  document.getElementById('home-greeting').textContent=`${text(data.greeting,'Hi! I am')} ${text(data.name,'Nutcracker')}`;
  document.getElementById('chapter-description').textContent=[text(data.nickname),text(data.intro)].filter(Boolean).join('\n');
  document.getElementById('home-smile').disabled=!smileyPhrases().length;
- const artSource=safeUrl(data.heroImage,true);const keepsake=document.getElementById('portrait-button');keepsake.hidden=false;
- const image=document.getElementById('portrait-image');image.hidden=!artSource;if(artSource){image.src=artSource;image.alt=text(data.heroImageAlt)||'Portfolio photo';}
- document.getElementById('portrait-caption').textContent='Some cool photos';keepsake.setAttribute('aria-label','Explore some cool photos below');
  document.getElementById('photos-lead').textContent=text(data.journalIntro,'A few things I wanted to keep. More photos and places will find their way here.');
  const photosTitle=document.getElementById('photos-title');const customTitle=text(data.journalTitle).trim();photosTitle.replaceChildren();if(customTitle)photosTitle.textContent=customTitle;else photosTitle.append(document.createTextNode('Some cool'),n('br'),n('em','','photos.'));
  collectionController?.destroy();collectionController=renderPhotoCollection(data,document.getElementById('photos-content'),{openPhoto,prepareText,onRender:()=>{observeReveals();scheduleScroll();}});
@@ -150,7 +153,7 @@ function updateScroll(){
  if(nearest!==active||!document.body.dataset.scrollReady){active=nearest;document.body.dataset.scrollReady='true';document.querySelectorAll('[data-slide]').forEach(link=>{if(link.dataset.slide===routes[active])link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});}
 }
 function scheduleScroll(){if(!scrollFrame)scrollFrame=requestAnimationFrame(updateScroll);}
-function syncScene(){scene?.setMotion(!motionOff()&&!editorMode&&!photoDialog.open);scene?.setLocked(editorMode||photoDialog.open);}
+function syncScene(){scene?.setMotion(bootEntered&&!motionOff()&&!editorMode&&!photoDialog.open);scene?.setLocked(!bootEntered||editorMode||photoDialog.open);}
 function updateMotion(){document.documentElement.classList.toggle('no-motion',motionOff());const button=document.getElementById('motion-toggle');button.replaceChildren(icon('motion'),document.createTextNode(motionOff()?' Motion off':' Motion on'));button.setAttribute('aria-pressed',String(motionOff()));button.setAttribute('aria-label',reduceQuery.matches?'Motion off, following your device preference':(motionOff()?'Turn animations on':'Turn animations off'));button.disabled=reduceQuery.matches;syncScene();observeReveals();scheduleScroll();}
 function chooseChapter(index){navigate(index,{focus:true});}
 penguin.addEventListener('click',event=>{
@@ -178,6 +181,7 @@ window.addEventListener('resize',scheduleScroll,{passive:true});
 function blockSecretScroll(event){if(editorMode&&!event.target.closest('.secret-controls'))event.preventDefault();}
 window.addEventListener('wheel',blockSecretScroll,{passive:false});window.addEventListener('touchmove',blockSecretScroll,{passive:false});
 document.addEventListener('keydown',event=>{
+ if(!bootEntered)return;
  const key=event.key.length===1?event.key.toLowerCase():event.key;
  const editable=event.target instanceof Element&&event.target.closest('input,textarea,select,[contenteditable]');
  if(event.altKey||event.ctrlKey||event.metaKey||event.isComposing||editable||photoDialog.open)return;
@@ -217,10 +221,10 @@ function renderSceneCardLabels(layouts){
   const {x,y,width,height}=layout.rect;const styles=[Math.round(x),Math.round(y),Math.round(width),Math.round(height),layout.opacity.toFixed(3)].join('/');if(node.dataset.layout===styles)continue;node.dataset.layout=styles;node.style.transform=`translate(${Math.round(x)}px,${Math.round(y)}px)`;node.style.width=Math.round(width)+'px';node.style.height=Math.round(height)+'px';node.style.setProperty('--card-scale',String(Math.min(1,Math.max(.45,height/112))));node.style.opacity=String(layout.opacity);
  }
 }
-function sceneFallback(){sceneCardLayer.hidden=true;document.body.classList.remove('scene-loading');document.querySelector('.scene-fallback').hidden=false;document.getElementById('universe-canvas').hidden=true;document.getElementById('scene-hint').textContent='SCROLL TO EXPLORE';document.getElementById('reset-view').hidden=true;}
+function sceneFallback(){boot.markSceneReady();sceneCardLayer.hidden=true;document.body.classList.remove('scene-loading');document.querySelector('.scene-fallback').hidden=false;document.getElementById('universe-canvas').hidden=true;document.getElementById('scene-hint').textContent='SCROLL TO EXPLORE';document.getElementById('reset-view').hidden=true;}
 document.body.classList.add('scene-loading');
-import('./scene.js?v=20261007-refine3').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>document.body.classList.remove('scene-loading'),onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
+import('./scene.js?v=20261007-refine4').then(({createPortfolioScene})=>{scene=createPortfolioScene({canvas:document.getElementById('universe-canvas'),onSelect:chooseChapter,onCardLayout:renderSceneCardLabels,onReady:()=>{document.body.classList.remove('scene-loading');boot.markSceneReady();},onError:sceneFallback});scene?.setScroll(scrollValue);syncScene();}).catch(sceneFallback);
 updateMotion();renderContent();
-fetch('portfolio.json?refresh=20261007-refine3',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>toast('The latest content could not load. Open the live website and refresh to try again.'));
-window.addEventListener('pagehide',event=>{if(!event.persisted){scene?.dispose();collectionController?.destroy();revealObserver?.disconnect();positionObserver?.disconnect();cancelAnimationFrame(scrollFrame);}});
+fetch('portfolio.json?refresh=20261007-refine4',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(content=>{if(!content||typeof content!=='object'||Array.isArray(content))throw new Error('invalid');data=content;renderContent();boot.markContentReady();if(location.hash)navigate(routeIndex(),{updateHistory:false});}).catch(()=>{boot.markContentReady();toast('The latest content could not load. Open the live website and refresh to try again.');});
+window.addEventListener('pagehide',event=>{if(!event.persisted){scene?.dispose();boot.destroy();soundtrackPlayer.destroy();collectionController?.destroy();revealObserver?.disconnect();positionObserver?.disconnect();cancelAnimationFrame(scrollFrame);}});
 window.addEventListener('pageshow',scheduleScroll);
