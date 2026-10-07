@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 
-/** Four scroll-connected worlds. Portfolio copy and accessible navigation remain in the DOM. */
-export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}) {
+/** Five scroll-connected worlds. Portfolio copy and accessible navigation remain in the DOM. */
+export function createPortfolioScene({ canvas, onSelect, onReady, onError, onCardLayout } = {}) {
   const noop = () => {};
   const empty = { setScroll: noop, setChapter: noop, setMotion: noop, setLocked: noop, resetView: noop, dispose: noop };
   let renderer;
@@ -25,8 +25,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   const stars = new THREE.Group();
   scene.add(gallery, stars);
   const worlds = [];
-  const palette = [0x8bc6ff, 0xa1d6ff, 0x58e2ff, 0xb8b0ff].map(hex => new THREE.Color(hex));
-  const backgrounds = [0x040c1c, 0x050e20, 0x02141e, 0x080c24].map(hex => new THREE.Color(hex));
+  const palette = [0x8bc6ff, 0x9aaeff, 0xa1d6ff, 0x58e2ff, 0xb8b0ff].map(hex => new THREE.Color(hex));
+  const backgrounds = [0x040c1c, 0x080e29, 0x050e20, 0x02141e, 0x080c24].map(hex => new THREE.Color(hex));
   const accent = palette[0].clone();
   const backdrop = backgrounds[0].clone();
   const lookTarget = new THREE.Vector3();
@@ -37,6 +37,11 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   const cards = [];
   const pickMeshes = [];
   const textures = new Set();
+  const panelRects = { value: Array.from({ length: 3 }, () => new THREE.Vector4()) };
+  const panelVisibility = { value: new THREE.Vector3() };
+  const panelRadius = { value: 10 };
+  const panelSoftness = { value: 5 };
+  const projectedCorner = new THREE.Vector3();
   const originalTouchAction = canvas.style.touchAction;
   canvas.style.touchAction = 'pan-y';
   let environmentTarget;
@@ -63,7 +68,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   let slowFrames = 0;
   const spacing = 9;
   const smoothstep = (start, end, value) => THREE.MathUtils.smoothstep(value, start, end);
-  const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 3);
+  const clampScroll = value => THREE.MathUtils.clamp(Number.isFinite(value) ? value : 0, 0, 4);
 
   scene.add(new THREE.HemisphereLight(0xd6e8ff, 0x061127, 2.2));
   const key = new THREE.DirectionalLight(0xf0f7ff, 4.1);
@@ -119,8 +124,39 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
 
   // The studio environment supplies the chrome highlights without the extra
   // clearcoat and iridescence passes of a physical material.
-  const chrome = () => new THREE.MeshStandardMaterial({ color: 0xcbdff2, metalness: 1, roughness: 0.19, transparent: true });
-  const ice = () => new THREE.MeshStandardMaterial({ color: 0x9cc6ff, metalness: 0.74, roughness: 0.18, emissive: 0x092548, emissiveIntensity: 0.5, transparent: true });
+  function fadeBehindPanels(material) {
+    material.onBeforeCompile = shader => {
+      shader.uniforms.uPortfolioPanelRects = panelRects;
+      shader.uniforms.uPortfolioPanelVisibility = panelVisibility;
+      shader.uniforms.uPortfolioPanelRadius = panelRadius;
+      shader.uniforms.uPortfolioPanelSoftness = panelSoftness;
+      shader.fragmentShader = `
+        uniform vec4 uPortfolioPanelRects[3];
+        uniform vec3 uPortfolioPanelVisibility;
+        uniform float uPortfolioPanelRadius;
+        uniform float uPortfolioPanelSoftness;
+        float portfolioPanelCoverage() {
+          float coverage = 0.0;
+          for (int panel = 0; panel < 3; panel++) {
+            if (uPortfolioPanelVisibility[panel] > 0.001) {
+              vec4 rect = uPortfolioPanelRects[panel];
+              vec2 edge = abs(gl_FragCoord.xy - rect.xy) - rect.zw + uPortfolioPanelRadius;
+              float distanceToEdge = length(max(edge, 0.0)) + min(max(edge.x, edge.y), 0.0) - uPortfolioPanelRadius;
+              float inside = 1.0 - smoothstep(-uPortfolioPanelSoftness, uPortfolioPanelSoftness, distanceToEdge);
+              coverage = max(coverage, inside * uPortfolioPanelVisibility[panel]);
+            }
+          }
+          return coverage;
+        }
+      ${shader.fragmentShader}`.replace('#include <color_fragment>', `#include <color_fragment>
+        diffuseColor.a *= mix(1.0, 0.16, portfolioPanelCoverage());`);
+    };
+    material.customProgramCacheKey = () => 'portfolio-panel-fade-v3';
+    return material;
+  }
+
+  const chrome = () => fadeBehindPanels(new THREE.MeshStandardMaterial({ color: 0xcbdff2, metalness: 1, roughness: 0.19, transparent: true }));
+  const ice = () => fadeBehindPanels(new THREE.MeshStandardMaterial({ color: 0x9cc6ff, metalness: 0.74, roughness: 0.18, emissive: 0x092548, emissiveIntensity: 0.5, transparent: true }));
   const lightMaterial = (color, opacity = 0.6) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
 
   function makeWorld(index) {
@@ -260,10 +296,59 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     world.flecks = flecks;
   }
 
+  const photoFrames = [];
+  let photoOrb;
+  function makePhotos() {
+    const world = makeWorld(1);
+    const frameGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const frameMaterial = chrome();
+    const framePose = new THREE.Object3D();
+    const gridPoints = [];
+    for (let i = 1; i < 5; i++) {
+      const x = -0.84 + i * 0.336;
+      gridPoints.push(new THREE.Vector3(x, -0.59, 0), new THREE.Vector3(x, 0.59, 0));
+      const y = -0.59 + i * 0.236;
+      gridPoints.push(new THREE.Vector3(-0.84, y, 0), new THREE.Vector3(0.84, y, 0));
+    }
+    const gridGeometry = new THREE.BufferGeometry().setFromPoints(gridPoints);
+    for (let i = 0; i < 3; i++) {
+      const frame = new THREE.Group();
+      const poses = [[0, 0.64, 1.8, 0.075], [0, -0.64, 1.8, 0.075], [-0.89, 0, 0.075, 1.28], [0.89, 0, 0.075, 1.28]];
+      const bars = new THREE.InstancedMesh(frameGeometry, frameMaterial, poses.length);
+      poses.forEach(([x, y, sx, sy], index) => {
+        framePose.position.set(x, y, 0);
+        framePose.scale.set(sx, sy, 0.055);
+        framePose.updateMatrix();
+        bars.setMatrixAt(index, framePose.matrix);
+      });
+      frame.add(bars);
+      frame.add(new THREE.LineSegments(gridGeometry, new THREE.LineBasicMaterial({ color: 0x92b3ff, transparent: true, opacity: 0.19, depthWrite: false, blending: THREE.AdditiveBlending })));
+      const x = [-1.08, 0.15, 1.26][i];
+      const y = [0.63, -0.47, 0.54][i];
+      frame.position.set(x, y, -i * 0.82);
+      frame.rotation.set(0.1 + i * 0.09, -0.3 + i * 0.3, -0.15 + i * 0.14);
+      frame.scale.setScalar(i === 1 ? 1.1 : 0.86);
+      world.group.add(frame);
+      photoFrames.push({ frame, baseY: y, baseZ: frame.rotation.z, phase: i * 1.8 });
+    }
+    photoOrb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), ice());
+    photoOrb.position.set(0.04, 0.2, 0.65);
+    world.group.add(photoOrb);
+    halo(world.group, 0x647bd6, 6.2, 0.22, new THREE.Vector3(0, 0.1, -2.4));
+    const points = [];
+    for (let i = 0; i < 24; i++) {
+      const angle = i * 2.399;
+      points.push(Math.cos(angle) * (1.9 + i % 3 * 0.2), Math.sin(angle) * 1.75, -0.5 - i % 4 * 0.7);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    world.group.add(new THREE.Points(geometry, new THREE.PointsMaterial({ map: glowMap, color: 0xb0caff, size: 0.055, transparent: true, opacity: 0.65, depthWrite: false, blending: THREE.AdditiveBlending })));
+  }
+
   const crystals = [];
   let achievementCrown;
   function makeAchievements() {
-    const world = makeWorld(1);
+    const world = makeWorld(2);
     achievementCrown = new THREE.Group();
     world.group.add(achievementCrown);
     const center = new THREE.Mesh(new THREE.OctahedronGeometry(1.02, 0), chrome());
@@ -327,7 +412,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   }
 
   function makeHobbies() {
-    const world = makeWorld(2);
+    const world = makeWorld(3);
     const columns = mobile ? 20 : 30;
     const rows = mobile ? 14 : 20;
     const positions = [];
@@ -397,7 +482,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
   let factCore;
   let nebula;
   function makeFacts() {
-    const world = makeWorld(3);
+    const world = makeWorld(4);
     nebula = new THREE.Group();
     world.group.add(nebula);
     halo(nebula, 0x535cc7, 9.4, 0.20, new THREE.Vector3(-0.6, 0.6, -7));
@@ -509,24 +594,26 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       context.strokeStyle = '#80b8e9';
       context.lineWidth = 3;
       context.stroke();
-      context.fillStyle = '#b7dcff';
-      context.font = '600 34px Arial, sans-serif';
-      context.fillText(`0${index + 1} / ${label}`, 54, 86);
-      context.fillStyle = '#ffffff';
-      context.font = '600 88px Arial, sans-serif';
-      context.fillText(title, 51, 232);
-      context.fillStyle = '#c7e4ff';
-      context.font = '600 34px Arial, sans-serif';
-      context.fillText('EXPLORE', 55, 342);
-      context.strokeStyle = '#d2eeff';
-      context.lineWidth = 4;
-      context.beginPath();
-      context.moveTo(w - 105, 345);
-      context.lineTo(w - 60, 300);
-      context.moveTo(w - 95, 300);
-      context.lineTo(w - 60, 300);
-      context.lineTo(w - 60, 335);
-      context.stroke();
+      if (typeof onCardLayout !== 'function') {
+        context.fillStyle = '#b7dcff';
+        context.font = '600 34px Arial, sans-serif';
+        context.fillText(`0${index + 1} / ${label}`, 54, 86);
+        context.fillStyle = '#ffffff';
+        context.font = '600 88px Arial, sans-serif';
+        context.fillText(title, 51, 232);
+        context.fillStyle = '#c7e4ff';
+        context.font = '600 34px Arial, sans-serif';
+        context.fillText('EXPLORE', 55, 342);
+        context.strokeStyle = '#d2eeff';
+        context.lineWidth = 4;
+        context.beginPath();
+        context.moveTo(w - 105, 345);
+        context.lineTo(w - 60, 300);
+        context.moveTo(w - 95, 300);
+        context.lineTo(w - 60, 300);
+        context.lineTo(w - 60, 335);
+        context.stroke();
+      }
     }, 1024, 416);
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
@@ -543,7 +630,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     outline.position.z = -0.006;
     group.add(outline);
     gallery.add(group);
-    cards.push({ index, group, face, outline, scale: 1, phase: index * 2.1 });
+    cards.push({ index, title, label, group, face, outline, scale: 1, opacity: 0, phase: index * 2.1 });
     pickMeshes.push(face);
   }
 
@@ -568,7 +655,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     const smoothing = animate ? 1 - Math.exp(-delta * 8) : 1;
     currentScroll += (targetScroll - currentScroll) * smoothing;
     renderedDrag.lerp(drag, smoothing);
-    const section = Math.min(2, Math.floor(currentScroll));
+    const section = Math.min(worlds.length - 2, Math.floor(currentScroll));
     const blend = smoothstep(0, 1, currentScroll - section);
     accent.copy(palette[section]).lerp(palette[section + 1], blend);
     backdrop.copy(backgrounds[section]).lerp(backgrounds[section + 1], blend);
@@ -584,7 +671,8 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     camera.position.set(pathX, pathY + 0.10, flight + distance);
     lookTarget.set(pathX, pathY * 0.38, flight - 0.4);
     camera.lookAt(lookTarget);
-    const side = THREE.MathUtils.lerp(section % 2 ? -1 : 1, (section + 1) % 2 ? -1 : 1, blend);
+    const worldSides = [1, -1, -1, 1, -1];
+    const side = THREE.MathUtils.lerp(worldSides[section], worldSides[Math.min(section + 1, worlds.length - 1)], blend);
     gallery.position.x = anchor * side;
     gallery.position.y = mobile ? -2.15 : 0;
     // Independent worlds keep the path continuous while their silhouettes change completely.
@@ -609,20 +697,28 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       }
     }
     if (worlds[1].group.visible) {
-      achievementCrown.rotation.y = time * 0.13 + (currentScroll - 1) * 0.58;
-      achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
-      for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
-      worlds[1].rings[0].rotation.z = -0.3 + time * 0.06;
-      worlds[1].rings[1].rotation.y = -0.3 + time * 0.035;
+      for (const { frame, baseY, baseZ, phase } of photoFrames) {
+        frame.position.y = baseY + Math.sin(time * 0.35 + phase) * 0.07;
+        frame.rotation.z = baseZ + Math.sin(time * 0.18 + phase) * 0.025;
+      }
+      photoOrb.rotation.set(time * 0.09, time * 0.14, 0.15);
+      photoOrb.position.y = 0.2 + Math.sin(time * 0.45) * 0.09;
     }
     if (worlds[2].group.visible) {
+      achievementCrown.rotation.y = time * 0.13 + (currentScroll - 2) * 0.58;
+      achievementCrown.rotation.z = Math.sin(time * 0.16) * 0.035;
+      for (const crystal of crystals) crystal.shard.position.z = Math.sin(time * 0.4 + crystal.angle * 2) * 0.36;
+      worlds[2].rings[0].rotation.z = -0.3 + time * 0.06;
+      worlds[2].rings[1].rotation.y = -0.3 + time * 0.035;
+    }
+    if (worlds[3].group.visible) {
       wavePhase.value = time * 0.47 + currentScroll * 0.8;
       for (const [i, portal] of portals.entries()) portal.rotation.z = 0.16 - i * 0.06 + Math.sin(time * 0.2 + i * 0.8) * 0.03;
       hobbyCube.rotation.set(time * 0.14 + 0.35, time * 0.2 + 0.65, 0.16);
       hobbyCube.position.y = 0.16 + Math.sin(time * 0.45) * 0.1;
-      worlds[2].paths.rotation.y = time * 0.026;
+      worlds[3].paths.rotation.y = time * 0.026;
     }
-    if (worlds[3].group.visible) {
+    if (worlds[4].group.visible) {
       for (const [i, ring] of tunnelRings.entries()) ring.rotation.z = i * 0.16 + time * 0.022;
       factCore.rotation.set(Math.sin(time * 0.13) * 0.12, time * 0.16, 0.13);
       nebula.rotation.z = Math.sin(time * 0.045) * 0.08;
@@ -635,27 +731,63 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
       const initial = 1 - smoothstep(0.05, 0.88, currentScroll);
       const active = 1 - smoothstep(0.15, 0.63, Math.abs(currentScroll - card.index));
       const opacity = Math.max(initial, active * 0.96);
+      card.opacity = opacity;
       // On a phone these tiny canvas labels become unreadable. The equivalent
       // chapter links remain available in the normal, accessible navigation.
       card.group.visible = !mobile && opacity > 0.04;
       if (!card.group.visible) continue;
-      card.face.material.opacity = opacity;
+      card.face.material.opacity = opacity * 0.72;
       card.outline.material.opacity = opacity * (hovered === card.group ? 0.82 : 0.32);
       const goalScale = (mobile ? 0.72 : 0.94) * (hovered === card.group ? 1.065 : 1) * (1 - active * (1 - initial) * 0.12);
       card.scale += (goalScale - card.scale) * smoothing;
       card.group.scale.setScalar(card.scale);
       const positions = mobile ? [[-0.83, 1.43], [1.05, -0.1], [-0.22, -1.55]] : [[-0.97, 1.15], [0.42, 0.10], [0.10, -0.95]];
-      const [x, y] = positions[card.index - 1];
+      const [x, y] = positions[card.index - 2];
       const live = active * (1 - initial);
       card.group.position.set(x * (1 - live) + (mobile ? 0 : 0.35) * live, y * (1 - live) + (mobile ? -1.92 : -1.72) * live + Math.sin(time * 0.55 + card.phase) * 0.035, flight + 0.85);
       // Navigation should stay readable while the sculpture rotates freely.
       card.group.quaternion.copy(camera.quaternion);
     }
+    updatePanelLayout();
     renderer.render(scene, camera);
     if (!ready) {
       ready = true;
       queueMicrotask(() => { if (!disposed && !failed) onReady?.(); });
     }
+  }
+
+  function updatePanelLayout() {
+    gallery.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    panelRadius.value = 10 * pixelRatio;
+    panelSoftness.value = 5 * pixelRatio;
+    const layouts = [];
+    for (const card of cards) {
+      const slot = card.index - 2;
+      if (!card.group.visible) {
+        panelVisibility.value.setComponent(slot, 0);
+        layouts.push({ index: card.index, title: card.title, label: card.label, rect: { x: 0, y: 0, width: 0, height: 0 }, opacity: 0, visible: false });
+        continue;
+      }
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const [x, y] of [[-1.04, -0.4225], [-1.04, 0.4225], [1.04, -0.4225], [1.04, 0.4225]]) {
+        projectedCorner.set(x, y, 0).applyMatrix4(card.face.matrixWorld).project(camera);
+        const px = (projectedCorner.x * 0.5 + 0.5) * width;
+        const py = (0.5 - projectedCorner.y * 0.5) * height;
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+      const rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      panelRects.value[slot].set((minX + rect.width / 2) * pixelRatio, (height - minY - rect.height / 2) * pixelRatio, rect.width / 2 * pixelRatio, rect.height / 2 * pixelRatio);
+      panelVisibility.value.setComponent(slot, card.opacity);
+      layouts.push({ index: card.index, title: card.title, label: card.label, rect, opacity: card.opacity, visible: true });
+    }
+    onCardLayout?.(layouts);
   }
 
   function fail(error) {
@@ -823,14 +955,15 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     makeEnvironment();
     glowMap = makeGlowMap();
     makeIntro();
+    makePhotos();
     makeAchievements();
     makeHobbies();
     makeFacts();
     for (const world of worlds) collectMaterials(world);
     makeStars();
-    makeCard(1, 'Milestones.', 'ACHIEVEMENTS');
-    makeCard(2, 'Side quests.', 'HOBBIES');
-    makeCard(3, 'Little secrets.', 'RANDOM FACTS');
+    makeCard(2, 'Milestones', 'ACHIEVEMENTS');
+    makeCard(3, 'Side Quests', 'HOBBIES');
+    makeCard(4, 'Fun Facts', 'RANDOM FACTS');
     canvas.addEventListener('pointerdown', pointerDown);
     canvas.addEventListener('pointermove', pointerMove, { passive: false });
     canvas.addEventListener('pointerup', pointerUp);
@@ -857,7 +990,7 @@ export function createPortfolioScene({ canvas, onSelect, onReady, onError } = {}
     },
     setChapter(index) {
       if (disposed || failed) return;
-      targetScroll = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 3);
+      targetScroll = THREE.MathUtils.clamp(Number.isFinite(index) ? Math.round(index) : 0, 0, 4);
       if (!motion) renderOnce();
       else resume();
     },
