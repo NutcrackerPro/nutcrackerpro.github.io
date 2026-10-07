@@ -15,11 +15,39 @@ const schemas = {
   facts:[['title','Card front — a title or question'],['description','Card back — your random fact','textarea']],
   smileyPhrases:[['text','Smiley phrase']],
   journalEntries:[['type','Entry category','journalType'],['title','Entry title'],['date','Date (optional)'],['location','Place / location (optional)'],['description','The story behind it (optional)','textarea'],['image','Photo (optional)','image'],['imageAlt','Describe the photo for someone who cannot see it']],
+  soundtracks:[['title','Track title'],['url','Soundtrack','audio']],
   contacts:[['label','Contact name'],['type','What kind of contact?','select'],['value','Email address, username or full web link']]
 };
 function node(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
 function change(){dirty=true;status.textContent='Unsaved draft — download or copy your changes before leaving.';}
 function imageSource(value){if(typeof value!=='string'||!value.trim())return '';if(/^data:image\/(png|jpeg|webp|gif|avif);base64,[A-Za-z0-9+/=\s]+$/.test(value))return value;try{const u=new URL(value.replace(/^\/(?!\/)/,''),document.baseURI);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}}
+const audioMimeTypes=new Set(['audio/mpeg','audio/mp3','audio/ogg','audio/wav','audio/x-wav','audio/wave','audio/aac','audio/mp4','audio/x-m4a','audio/webm','audio/flac','audio/x-flac']);
+const audioDataPattern=/^data:audio\/(mpeg|ogg|wav|x-wav|wave|aac|mp4|x-m4a|webm|flac|x-flac);base64,([A-Za-z0-9+/]+={0,2})$/;
+function audioSource(value){
+ if(typeof value!=='string'||!value.trim())return '';const source=value.trim();const embedded=source.match(audioDataPattern);
+ if(embedded){try{if(embedded[2].length%4!==0||atob(embedded[2]).length>2*1024*1024)return '';return source;}catch{return '';}}
+ try{const url=new URL(source);return url.protocol==='https:'&&/\.(mp3|ogg|oga|wav|m4a|aac|mp4|webm|flac)$/i.test(url.pathname)?url.href:'';}catch{return '';}
+}
+function readAudioFile(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read that audio file. Please try again.'));const aliases={'audio/mp3':'audio/mpeg','audio/x-wav':'audio/wav','audio/wave':'audio/wav','audio/x-m4a':'audio/mp4','audio/x-flac':'audio/flac'};reader.readAsDataURL(new Blob([file],{type:aliases[file.type]||file.type}));});}
+function checkAudioFile(source){return new Promise((resolve,reject)=>{const probe=document.createElement('audio');probe.preload='metadata';let timer;const finish=error=>{clearTimeout(timer);probe.onloadedmetadata=null;probe.onerror=null;probe.removeAttribute('src');probe.load();error?reject(error):resolve();};probe.onloadedmetadata=()=>finish();probe.onerror=()=>finish(new Error('That file could not be played by this browser. Try an MP3, OGG or WAV audio file.'));timer=setTimeout(()=>finish(new Error('The audio file could not be checked. Please try a smaller MP3, OGG or WAV file.')),10000);probe.src=source;probe.load();});}
+function audioField(label,value,set){
+ const owner=draft;let version=0;const wrap=node('div','audio-field');const preview=node('audio','audio-preview');preview.controls=true;preview.preload='none';preview.setAttribute('aria-label','Soundtrack preview');
+ function show(source){preview.pause();preview.hidden=!source;if(source)preview.src=source;else preview.removeAttribute('src');preview.load();}
+ const url=field(label+' — direct HTTPS audio link',value,next=>{version++;set(next);const source=audioSource(next);show(source);if(next.trim()&&!source)status.textContent='Use a direct HTTPS link to an MP3, OGG, WAV, M4A, AAC, WebM or FLAC audio file, or choose an audio file below.';});const textInput=url.querySelector('input');textInput.maxLength=4096;textInput.placeholder='https://example.com/track.mp3';
+ if(typeof value==='string'&&value.startsWith('data:')){textInput.value='';textInput.placeholder='Uploaded soundtrack selected';}
+ show(audioSource(value));
+ const upload=node('input','audio-upload');upload.type='file';upload.accept='audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/aac,audio/mp4,audio/x-m4a,audio/webm,audio/flac,audio/x-flac,.mp3,.ogg,.oga,.wav,.aac,.m4a,.webm,.flac';const uploadLabel=node('label','','Or choose an audio file (up to 2 MB)');uploadLabel.append(upload);
+ upload.addEventListener('change',async()=>{const file=upload.files[0];if(!file)return;const request=++version;if(!audioMimeTypes.has(file.type)||file.size===0||file.size>2*1024*1024){status.textContent='Choose a supported audio file under 2 MB. For a longer track, use a direct HTTPS audio link.';upload.value='';return;}
+  upload.disabled=true;status.textContent='Checking your soundtrack…';
+  try{const source=await readAudioFile(file);if(!audioSource(source))throw new Error('That file is not a supported audio upload.');await checkAudioFile(source);if(draft!==owner||!wrap.isConnected||request!==version)return;set(source);show(source);textInput.value='';textInput.placeholder='Uploaded soundtrack selected';change();}
+  catch(error){if(draft===owner&&wrap.isConnected&&request===version)status.textContent=error.message||'Could not open that soundtrack. Please choose another.';}
+  finally{upload.disabled=false;upload.value='';}
+ });
+ const clear=node('button','secondary-button audio-clear','Remove audio');clear.type='button';clear.addEventListener('click',()=>{version++;set('');show('');textInput.value='';textInput.placeholder='https://example.com/track.mp3';change();});
+ preview.addEventListener('play',()=>{document.querySelectorAll('.audio-preview').forEach(audio=>{if(audio!==preview)audio.pause();});});preview.addEventListener('error',()=>{if(draft===owner&&wrap.isConnected)status.textContent='This track could not be previewed. Check that the link opens an audio file and is publicly accessible.';});
+ wrap.append(preview,url,uploadLabel,clear,node('p','field-help','MP3, OGG, WAV, M4A, AAC, WebM and FLAC files are supported where your browser can play them. Uploaded audio stays in this draft until you publish.'));
+ return wrap;
+}
 function field(label,value,set,type='text'){
  const wrap=node('label','',label);const input=node(type==='textarea'?'textarea':(type==='select'||type==='journalType')?'select':'input');
  if(type==='select'||type==='journalType'){for(const [v,t] of (type==='journalType'?[['artwork','Photo'],['travel','Place / travel']]:[['link','Web link'],['email','Email'],['copy','Copy username']])){const option=node('option','',t);option.value=v;input.append(option);}}
@@ -65,13 +93,13 @@ function imageField(label,value,set){
  wrap.append(preview,url,uploadLabel,help);return wrap;
 }
 function renderList(key){
- const container=document.getElementById('edit-'+key);container.replaceChildren();
+ const container=document.getElementById('edit-'+key);container.querySelectorAll('audio').forEach(audio=>{audio.pause();audio.removeAttribute('src');audio.load();});container.replaceChildren();
  if(!draft[key].length){container.append(node('p','repeat-empty','Nothing here yet. Use the add button to start.'));return;}
  draft[key].forEach((item,index)=>{
   const card=node('div','repeat-card');const head=node('div','repeat-card-head');const title=node('h3','',`${index+1}. ${item.title||item.label||item.text||'Untitled'}`);const actions=node('div','item-actions');
   for(const [label,delta] of [['Move up',-1],['Move down',1]]){const b=node('button','',label);b.type='button';b.disabled=index+delta<0||index+delta>=draft[key].length;b.addEventListener('click',()=>{[draft[key][index],draft[key][index+delta]]=[draft[key][index+delta],draft[key][index]];change();renderList(key);});actions.append(b);}
   const remove=node('button','remove-button','Remove');remove.type='button';remove.addEventListener('click',()=>{if(window.confirm('Remove this item from your draft? Your published website is unchanged.')){draft[key].splice(index,1);change();renderList(key);}});actions.append(remove);head.append(title,actions);card.append(head);
-  for(const [name,label,type] of schemas[key]){const set=value=>{item[name]=value;if(name==='title'||name==='label'||name==='text')title.textContent=`${index+1}. ${value||'Untitled'}`;};card.append(type==='image'?imageField(label,item[name],set):field(label,item[name],set,type));}
+  for(const [name,label,type] of schemas[key]){const set=value=>{item[name]=value;if(name==='title'||name==='label'||name==='text')title.textContent=`${index+1}. ${value||'Untitled'}`;};card.append(type==='image'?imageField(label,item[name],set):type==='audio'?audioField(label,item[name],set):field(label,item[name],set,type));}
   container.append(card);
  });
 }
@@ -82,7 +110,8 @@ function serialize(){
   if(contact.type==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))throw new Error('Please enter a valid contact email address.');
   if(contact.type==='link'){let u;try{u=new URL(value);}catch{throw new Error('Web links must start with https:// or http://.');}if(!['http:','https:'].includes(u.protocol))throw new Error('Web links must start with https:// or http://.');}
  }
- const content=JSON.stringify(draft,null,2)+'\n';if(new Blob([content]).size>8*1024*1024)throw new Error('Your content is over 8 MB. Please use smaller photos before saving.');return content;
+ for(const track of draft.soundtracks){const source=typeof track.url==='string'?track.url.trim():'';if(source&&!audioSource(source))throw new Error('Each soundtrack needs a direct HTTPS audio link or a supported uploaded audio file under 2 MB.');}
+ const content=JSON.stringify(draft,null,2)+'\n';if(new Blob([content]).size>8*1024*1024)throw new Error('Your content is over 8 MB. Use smaller photos or hosted audio links before saving.');return content;
 }
 form.addEventListener('submit',event=>event.preventDefault());
 form.addEventListener('input',event=>{if(scalar.includes(event.target.name)){draft[event.target.name]=event.target.value;change();}});
