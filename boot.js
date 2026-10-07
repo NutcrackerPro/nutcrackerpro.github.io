@@ -46,8 +46,7 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
         </div>
         <p class="boot-status" role="status" aria-live="polite">Starting up<span aria-hidden="true">...</span></p>
         <div class="boot-entry" hidden>
-          <span class="boot-scroll-prompt"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Scroll down to enter</span>
-          <button type="button" class="boot-enter">Enter portfolio<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="boot-enter" aria-label="Enter portfolio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg><span>Scroll down to enter</span></button>
         </div>
       </div>
       <aside class="boot-telemetry boot-telemetry-right" aria-hidden="true"><span class="boot-telemetry-heading">INTERFACE MAP</span><div class="boot-mini-map"><span></span><span></span><span></span></div><div class="boot-map-labels"><span>01 / INTRODUCTION</span><span>02 / PHOTOS</span><span>03 / MILESTONES</span><span>04 / SIDE QUESTS</span><span>05 / FUN FACTS</span></div></aside>
@@ -110,7 +109,7 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
 
   function releaseScreen() {
     document.body.style.overflow = previousOverflow;
-    document.body.classList.remove('boot-active');
+    document.body.classList.remove('boot-active', 'boot-exiting');
     document.body.classList.add('boot-done');
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected && !previouslyFocused.closest('[inert]')) {
       previouslyFocused.focus({ preventScroll: true });
@@ -120,14 +119,15 @@ export function createBootScreen({ name = 'Nutcracker', onEnter = () => {}, mini
   function enter() {
     if (!ready || entered || destroyed) return;
     entered = true;
+    document.body.classList.add('boot-exiting');
     screen.classList.add('is-leaving');
-    // Restore the page and resume its scene together, after the short fade.
+    // Reveal the still scene during the exit, then restore its interaction.
     exitTimer = window.setTimeout(() => {
       if (destroyed) return;
       screen.remove();
       releaseScreen();
       onEnter();
-    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240);
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('no-motion') || document.body.classList.contains('no-motion') ? 0 : 700);
   }
 
   function onWheel(event) {
