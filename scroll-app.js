@@ -1,5 +1,5 @@
 'use strict';
-import { renderPhotoCollection } from './collection.js?v=20261007-refine7';
+import { renderPhotoCollection } from './collection.js?v=20261008-photos1';
 import { createBootScreen } from './boot.js?v=20261007-refine7';
 import { createSoundtrackPlayer } from './soundtrack.js?v=20261007-refine7';
 let scene;
@@ -191,7 +191,7 @@ document.addEventListener('keydown',event=>{
  const editable=event.target instanceof Element&&event.target.closest('input,textarea,select,[contenteditable]');
  if(event.altKey||event.ctrlKey||event.metaKey||event.isComposing||editable||photoDialog.open)return;
  if(editorMode){if(key===' '&&event.target.closest('.secret-key'))return;if(key.startsWith('Arrow')||key.length===1||['PageUp','PageDown','Home','End'].includes(key)){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)enterEditorKey(key);}return;}
- if(event.repeat||event.shiftKey||event.target.closest('button,summary,a'))return;
+ if(event.repeat||event.shiftKey||event.target.closest('button,summary,a,.collection-strip'))return;
  if(key==='ArrowRight'){event.preventDefault();navigate(active+1);}if(key==='ArrowLeft'){event.preventDefault();navigate(active-1);}
 },true);
 window.addEventListener('blur',()=>{resetPenguinTaps();if(editorMode){editorKeys=[];showSecretProgress('Enter your code, or tap the penguin to cancel.');}});
