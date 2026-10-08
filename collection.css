@@ -1,28 +1,50 @@
-/* Collection content shares the 3D world; only real controls/cards receive taps. */
-.scroll-portfolio #photos-content,.scroll-portfolio .photo-collection,.scroll-portfolio .collection-wrap,.scroll-portfolio .collection-controls,.scroll-portfolio .collection-filters,.scroll-portfolio .collection-grid{pointer-events:none}
+/* Native photo filmstrip: scoped to this collection, without changing the 3D worlds. */
+.scroll-portfolio #photos-content,.scroll-portfolio .photo-collection,.scroll-portfolio .collection-wrap,.scroll-portfolio .collection-controls,.scroll-portfolio .collection-filters,.scroll-portfolio .collection-stage,.scroll-portfolio .collection-navigation{pointer-events:none}
 .scroll-portfolio .photo-collection{max-width:780px}
-.scroll-portfolio .collection-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px;margin-bottom:30px}
+.scroll-portfolio .collection-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px;margin-bottom:28px}
 .scroll-portfolio .collection-filters{display:flex;flex-wrap:wrap;gap:7px}
 .scroll-portfolio .collection-filter{pointer-events:auto;display:inline-flex;align-items:center;gap:10px;padding:10px 14px;min-height:42px;border:1px solid #9fbfea35;border-radius:30px;background:#142337ed;font-size:10px;color:#b5c9e3;cursor:pointer}
 .scroll-portfolio .collection-filter:hover{border-color:#b3d4ff76;background:#1a3049f5}
 .scroll-portfolio .collection-filter.active{border-color:#bdd9ff9c;background:#b2d1f2;color:#0c1a2c}
 .scroll-portfolio .collection-filter-count{font-size:8px;opacity:.65}
 .scroll-portfolio .collection-count{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#8fa8c5;margin:0}
-.scroll-portfolio .collection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
-.scroll-portfolio .collection-grid:has(>.collection-card:only-child){grid-template-columns:minmax(0,560px)}
-.scroll-portfolio .collection-card{pointer-events:auto;min-width:0;border:1px solid #93b6e24d;border-radius:18px;background:linear-gradient(145deg,#1a2d43f9,#111e30f9);box-shadow:0 10px 24px #03080f30,inset 0 1px 0 #d7eaff0b;overflow:hidden}
-.scroll-portfolio .collection-image{position:relative;border:0;background:#0c1726;padding:0;margin:0;width:100%;display:block;text-align:left;border-radius:0;color:#c5dbf5;cursor:zoom-in;min-height:220px}
-.scroll-portfolio .collection-image img{display:block;width:100%;height:260px;object-fit:cover;transition:transform .25s ease;filter:none;transform:translateZ(0)}
-.scroll-portfolio .collection-card:only-child .collection-image img{height:360px;max-height:54svh}
-.scroll-portfolio .collection-image:hover img{transform:scale(1.025)}
-.scroll-portfolio .collection-image-hint{position:absolute;left:14px;bottom:14px;display:flex;gap:9px;align-items:center;padding:8px 11px;border:1px solid #abcdf252;border-radius:30px;background:#0a1428ed;color:#bbd4ef;font-size:9px;line-height:1.5}
+.scroll-portfolio .collection-stage{position:relative;isolation:isolate}
+.scroll-portfolio .collection-stage::before,.scroll-portfolio .collection-stage::after{content:"";position:absolute;z-index:2;top:0;bottom:0;width:35px;pointer-events:none;opacity:0;transition:opacity .18s;background:linear-gradient(90deg,#070b13dc,transparent)}
+.scroll-portfolio .collection-stage::before{left:0}.scroll-portfolio .collection-stage::after{right:0;rotate:180deg}
+.scroll-portfolio .collection-stage.has-overflow:not(.at-start)::before,.scroll-portfolio .collection-stage.has-overflow:not(.at-end)::after{opacity:1}
+.scroll-portfolio .collection-strip{--photo-height:240px;position:relative;pointer-events:auto;display:flex;align-items:flex-start;gap:26px;width:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;touch-action:pan-x pan-y;scrollbar-width:none;padding:3px 0 12px;outline-offset:5px}
+.scroll-portfolio .collection-strip::-webkit-scrollbar{display:none}
+.scroll-portfolio .collection-strip.single-photo{max-width:390px;overflow:visible}
+.scroll-portfolio .collection-strip.is-dragging{scroll-snap-type:none;cursor:grabbing;user-select:none}
+.scroll-portfolio .collection-strip.is-dragging *{cursor:grabbing!important;user-select:none}
+.scroll-portfolio .collection-strip:focus-visible{outline:2px solid #a8cfff;outline-offset:5px;border-radius:10px}
+.scroll-portfolio .collection-card{pointer-events:auto;flex:0 0 320px;min-width:0;scroll-snap-align:start;scroll-snap-stop:normal;background:none;border:0;box-shadow:none;border-radius:0;transform:none}
+.scroll-portfolio .single-photo .collection-card{flex-basis:100%;width:100%}
+.scroll-portfolio .collection-image{position:relative;border:0;background:none;padding:0;margin:0;width:100%;height:var(--photo-height);display:block;text-align:left;border-radius:10px;color:#c5dbf5;cursor:zoom-in;overflow:hidden}
+.scroll-portfolio .collection-image img{display:block;width:100%;height:100%;object-fit:contain;object-position:left center;border-radius:10px;filter:none;transform:none}
+.scroll-portfolio .single-photo .collection-image{height:auto;max-height:54svh;aspect-ratio:var(--source-ratio,1)}
+.scroll-portfolio .single-photo .collection-image img{height:auto;max-height:54svh;width:100%;object-fit:contain;object-position:left top}
+.scroll-portfolio .collection-image-hint{position:absolute;left:11px;bottom:11px;display:flex;gap:8px;align-items:center;padding:7px 10px;border:1px solid #abcdf252;border-radius:30px;background:#0a1428e8;color:#bbd4ef;font-size:9px;line-height:1.5;opacity:0;transition:opacity .2s}
+.scroll-portfolio .collection-image:hover .collection-image-hint,.scroll-portfolio .collection-image:focus-visible .collection-image-hint{opacity:1}
 .scroll-portfolio .collection-image-hint .icon{width:13px;height:13px;flex-shrink:0}
-.scroll-portfolio .collection-image.image-unavailable{min-height:180px;cursor:default}
-.scroll-portfolio .collection-card-copy{padding:23px 24px 26px}
-.scroll-portfolio .collection-card-meta{display:flex;justify-content:space-between;gap:15px;margin:0 0 16px;font-size:8px;letter-spacing:.15em;color:#8faccf;line-height:1.6}
-.scroll-portfolio .collection-card-title{font:400 25px/1.15 var(--sans);letter-spacing:-.035em;color:#eff4fc;margin:0;overflow-wrap:anywhere}
-.scroll-portfolio .collection-card-location{font-size:10px;line-height:1.8;color:#8fabc9;margin:12px 0 0;overflow-wrap:anywhere}
-.scroll-portfolio .collection-card-description{color:#c2cfde;font-size:12px;line-height:1.85;margin:17px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.scroll-portfolio .collection-image.image-unavailable{height:var(--photo-height);background:#142237;border:1px dashed #718ba84d;cursor:default}
+.scroll-portfolio .collection-image.image-unavailable .collection-image-hint{opacity:1}
+.scroll-portfolio .collection-note{height:var(--photo-height);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:17px;border:1px dashed #718ba84d;border-radius:10px;background:#142237cc;color:#9cbadd;font-size:10px}
+.scroll-portfolio .collection-note .icon{width:35px;height:35px}
+.scroll-portfolio .collection-card-copy{padding:21px 0 5px}
+.scroll-portfolio .collection-card-meta{display:flex;justify-content:space-between;gap:15px;margin:0 0 12px;font-size:7px;letter-spacing:.14em;color:#8faccf;line-height:1.6}
+.scroll-portfolio .collection-card-title{font:400 24px/1.16 var(--sans);letter-spacing:-.035em;color:#eff4fc;margin:0;overflow-wrap:anywhere}
+.scroll-portfolio .collection-card-location{font-size:10px;line-height:1.8;color:#8fabc9;margin:10px 0 0;overflow-wrap:anywhere}
+.scroll-portfolio .collection-card-description{color:#c2cfde;font-size:12px;line-height:1.8;margin:14px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.scroll-portfolio .collection-navigation{display:flex;align-items:center;gap:18px;margin-top:18px;padding-top:18px;border-top:1px solid #93b6e225}
+.scroll-portfolio .collection-navigation[hidden],.scroll-portfolio .collection-stage[hidden]{display:none}
+.scroll-portfolio .collection-scroll-hint{font-size:9px;line-height:1.7;color:#8a9fba;margin:0}
+.scroll-portfolio .collection-position{font-size:9px;color:#b3c9e5;margin-left:auto;white-space:nowrap}
+.scroll-portfolio .collection-arrows{display:flex;gap:8px}
+.scroll-portfolio .collection-arrow{pointer-events:auto;display:grid;place-items:center;width:44px;height:44px;min-height:44px;padding:11px;border:1px solid #9fbfea50;border-radius:50%;background:#142337ed;color:#bed4ef;cursor:pointer}
+.scroll-portfolio .collection-arrow:hover:not(:disabled){background:#243c57;border-color:#bed7f6a8}
+.scroll-portfolio .collection-arrow:disabled{opacity:.28;cursor:default}
+.scroll-portfolio .collection-arrow .icon{width:20px;height:20px}
 .scroll-portfolio .collection-empty{pointer-events:auto;display:flex;gap:25px;align-items:center;max-width:680px;padding:30px;background:#142237f5;border:1px solid #aac7e54f;border-radius:18px}
 .scroll-portfolio .collection-empty[hidden]{display:none}
 .scroll-portfolio .collection-empty>.icon{width:32px;height:32px;flex-shrink:0;color:#9cc5ec}
@@ -38,7 +60,7 @@
 .scroll-portfolio .collection-dialog-title{font:400 31px/1.1 var(--sans);letter-spacing:-.04em;margin:0 0 12px;overflow-wrap:anywhere}
 .scroll-portfolio .collection-dialog-meta{font-size:11px;color:#9db4d0;line-height:1.6;overflow-wrap:anywhere;margin:0}
 .scroll-portfolio .collection-dialog-description{font-size:13px;line-height:1.8;color:#c6d3e5;white-space:pre-wrap;overflow-wrap:anywhere;margin:18px 0 0}
-@media(max-width:1000px){.scroll-portfolio .collection-grid{gap:18px}.scroll-portfolio .collection-card-copy{padding:22px}.scroll-portfolio .collection-image img{height:225px}.scroll-portfolio .collection-card-title{font-size:23px}}
-@media(max-width:650px){.scroll-portfolio .collection-controls{gap:15px;margin-bottom:24px}.scroll-portfolio .collection-filter{font-size:9px;padding:9px 11px;gap:8px;min-height:42px}.scroll-portfolio .collection-grid{grid-template-columns:1fr;gap:22px}.scroll-portfolio .collection-image img{height:275px;max-height:46svh}.scroll-portfolio .collection-card:only-child .collection-image img{height:330px;max-height:47svh}.scroll-portfolio .collection-card-copy{padding:23px}.scroll-portfolio .collection-card-title{font-size:26px}.scroll-portfolio .collection-empty{padding:25px 21px;gap:18px}.scroll-portfolio .collection-empty h3{font-size:23px}.scroll-portfolio .collection-dialog-details{padding:25px}.scroll-portfolio .collection-dialog-image{padding:14px}.scroll-portfolio .collection-dialog-title{font-size:28px}}
-@media(prefers-reduced-motion:reduce){.scroll-portfolio .collection-image img{transition:none}.scroll-portfolio .collection-image:hover img{transform:none}}
-.no-motion .scroll-portfolio .collection-image:hover img{transform:none}
+@media(max-width:1000px){.scroll-portfolio .collection-strip{--photo-height:225px;gap:22px}.scroll-portfolio .collection-card-title{font-size:22px}}
+@media(max-width:650px){.scroll-portfolio .collection-controls{gap:15px;margin-bottom:24px}.scroll-portfolio .collection-filter{font-size:9px;padding:9px 11px;gap:8px;min-height:42px}.scroll-portfolio .collection-strip{--photo-height:210px;gap:20px}.scroll-portfolio .collection-card{flex-basis:min(310px,82%)}.scroll-portfolio .single-photo .collection-card{flex-basis:100%}.scroll-portfolio .collection-card-copy{padding-top:19px}.scroll-portfolio .collection-card-title{font-size:23px}.scroll-portfolio .collection-scroll-hint{max-width:115px;font-size:8px}.scroll-portfolio .collection-navigation{gap:12px;flex-wrap:wrap}.scroll-portfolio .collection-position{font-size:8px}.scroll-portfolio .collection-arrow{width:42px;height:42px;min-height:42px;padding:10px}.scroll-portfolio .collection-stage::before,.scroll-portfolio .collection-stage::after{width:22px}.scroll-portfolio .collection-image-hint{opacity:1;font-size:8px;padding:6px 8px;left:9px;bottom:9px}.scroll-portfolio .collection-empty{padding:25px 21px;gap:18px}.scroll-portfolio .collection-empty h3{font-size:23px}.scroll-portfolio .collection-dialog-details{padding:25px}.scroll-portfolio .collection-dialog-image{padding:14px}.scroll-portfolio .collection-dialog-title{font-size:28px}}
+@media(prefers-reduced-motion:reduce){.scroll-portfolio .collection-stage::before,.scroll-portfolio .collection-stage::after,.scroll-portfolio .collection-image-hint{transition:none}}
+.no-motion .scroll-portfolio .collection-stage::before,.no-motion .scroll-portfolio .collection-stage::after,.no-motion .scroll-portfolio .collection-image-hint{transition:none}
