@@ -41,7 +41,7 @@ Visitors choose Play before music starts. The compact player offers Play/Pause, 
 
 ## Some cool photos
 
-The **Some cool photos** section is part of the scrolling homepage, directly below Self introduction. The introduction has no extra photo shortcut card. It shares the dark-blue 3D design of the other sections and has its own floating photo-frame world. Filters show Everything, Photos, or Places & travel. Select a photo to view it full size. Blank space between controls and cards stays available for rotating the background models.
+The **Some cool photos** section is part of the scrolling homepage, directly below Self introduction. The introduction has no extra photo shortcut card. It shares the dark-blue 3D design of the other sections and has its own floating photo-frame world. Photos sit in a horizontal filmstrip inspired by Ruhan’s portfolio, with captions below the images. Swipe sideways, scroll horizontally, use the previous/next arrows, or focus the strip and use Left/Right, Home or End. Arrows appear only when the collection overflows. Filters show Everything, Photos, or Places & travel. Select a photo to view it full size. Blank space outside the strip stays available for rotating the background models. The strip uses native scrolling and lazy image loading without a second 3D renderer or continuously running animation loop.
 
 In the editor, **06 / Some cool photos** lets you set the section title/introduction and add, remove or reorder entries with a category, title, date, location, note and photo. Future travel photos and places visited can be added here. Publish the same `portfolio.json` file as usual; no separate page or account is needed.
 
